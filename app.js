@@ -322,7 +322,7 @@ function renderMembers() {
       <div class="member-card-top"><span>Member ${index + 1}</span><span>${index === 0 ? "TEAM CONTACT" : "PARTICIPANT"}</span></div>
       <div class="member-fields">
         <div><label class="field-label" for="member-${index}-name">Full name <span>*</span></label><input class="text-input" id="member-${index}-name" name="memberName" autocomplete="name" maxlength="100" required /></div>
-        <div><label class="field-label" for="member-${index}-college">College name <span>*</span></label><input class="text-input" id="member-${index}-college" name="memberCollege" maxlength="120" required /></div>
+        <div><label class="field-label" for="member-${index}-college">College name <span>*</span></label><input class="text-input" id="member-${index}-college" name="memberCollege" maxlength="160" required /></div>
         <div><label class="field-label" for="member-${index}-mobile">Mobile number <span>*</span></label><input class="text-input" id="member-${index}-mobile" name="memberMobile" type="tel" inputmode="tel" autocomplete="tel" minlength="7" maxlength="18" title="Enter a valid mobile number" required /></div>
         <div><label class="field-label" for="member-${index}-email">Gmail address <span>*</span></label><input class="text-input" id="member-${index}-email" name="memberEmail" type="email" autocomplete="email" maxlength="254" pattern="[^@\\s]+@gmail\\.com" title="Please enter a Gmail address ending in @gmail.com" required /></div>
       </div>`;
@@ -422,6 +422,65 @@ function getMembersFromForm() {
   }));
 }
 
+function validateTeamFormFields() {
+  const teamName = document.querySelector("#team-name");
+  const trimmedTeamName = teamName.value.trim();
+  teamName.setCustomValidity(
+    trimmedTeamName.length < 2 || trimmedTeamName.length > 60
+      ? "Enter a team name between 2 and 60 characters."
+      : "",
+  );
+
+  const emailInputs = [...teamForm.querySelectorAll('input[name="memberEmail"]')];
+  const normalizedEmails = emailInputs.map((input) => input.value.trim().toLowerCase());
+  const validGmail = /^[^@\s]+@gmail\.com$/i;
+
+  for (let index = 0; index < memberCount; index += 1) {
+    const nameInput = document.querySelector(`#member-${index}-name`);
+    const collegeInput = document.querySelector(`#member-${index}-college`);
+    const mobileInput = document.querySelector(`#member-${index}-mobile`);
+    const emailInput = emailInputs[index];
+    const name = nameInput.value.trim();
+    const college = collegeInput.value.trim();
+    const mobile = mobileInput.value.trim();
+    const email = normalizedEmails[index];
+
+    nameInput.setCustomValidity(
+      name.length === 0 || name.length > 100
+        ? "Enter this member's full name (up to 100 characters)."
+        : "",
+    );
+    collegeInput.setCustomValidity(
+      college.length === 0 || college.length > 160
+        ? "Enter this member's college name (up to 160 characters)."
+        : "",
+    );
+    mobileInput.setCustomValidity(
+      !/^[0-9+() -]{7,18}$/.test(mobile)
+        ? "Enter a valid mobile number using 7–18 digits and + ( ) - characters."
+        : "",
+    );
+
+    const isDuplicate = email !== "" && normalizedEmails.indexOf(email) !== index;
+    emailInput.setCustomValidity(
+      !validGmail.test(email)
+        ? "Enter a valid Gmail address ending in @gmail.com."
+        : isDuplicate
+          ? "Each team member must use a different Gmail address."
+          : index === 0 && participantUser?.email
+              && email !== participantUser.email.trim().toLowerCase()
+            ? "The first member's Gmail must match the signed-in account."
+            : "",
+    );
+  }
+
+  return teamForm.checkValidity();
+}
+
+teamForm.addEventListener("input", (event) => {
+  if (event.target instanceof HTMLInputElement) validateTeamFormFields();
+});
+
 function resetRegistrationForm() {
   teamForm.reset();
   paymentForm.reset();
@@ -493,6 +552,7 @@ document.querySelector("#remove-member").addEventListener("click", () => {
 
 teamForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  validateTeamFormFields();
   if (!teamForm.reportValidity()) return;
   if (!supabase) {
     showToast("Registration services are not configured yet.");
