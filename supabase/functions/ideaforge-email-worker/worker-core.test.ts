@@ -7,6 +7,7 @@ const row = {
   recipient_email: "contact@example.com",
   recipient_name: "Contact",
   team_name: "Demo Team",
+  team_code: "IF-ABC1234567",
   member_names: ["Contact", "Member"],
   attempt_count: 1,
 };

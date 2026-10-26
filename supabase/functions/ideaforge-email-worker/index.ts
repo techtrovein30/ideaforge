@@ -133,6 +133,7 @@ Deno.serve(async (request) => {
       }
       const content = buildPaymentConfirmation({
         teamName: row.team_name,
+        teamCode: row.team_code,
         recipientName: row.recipient_name,
         memberNames: row.member_names ?? [],
       } satisfies PaymentConfirmation);

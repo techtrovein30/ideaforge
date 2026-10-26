@@ -1,5 +1,6 @@
 export interface PaymentConfirmation {
   teamName: string;
+  teamCode: string;
   recipientName: string | null;
   memberNames: string[];
 }
@@ -25,6 +26,7 @@ function escapeHtml(value: string): string {
 
 export function buildPaymentConfirmation(data: PaymentConfirmation): EmailContent {
   const safeTeamName = escapeHtml(data.teamName);
+  const safeTeamCode = escapeHtml(data.teamCode);
   const greetingText = data.recipientName
     ? `Hi ${data.recipientName},`
     : "Hello,";
@@ -44,6 +46,9 @@ export function buildPaymentConfirmation(data: PaymentConfirmation): EmailConten
       "",
       `Payment for ${data.teamName} has been approved. Your team registration is confirmed.`,
       "",
+      `Team check-in code: ${data.teamCode}`,
+      "Show the QR code in the team leader's IdeaForge profile at event check-in.",
+      "",
       `Team members: ${membersText}`,
       "",
       "See you at IdeaForge!",
@@ -57,6 +62,8 @@ export function buildPaymentConfirmation(data: PaymentConfirmation): EmailConten
       <h1 style="font-size:24px">Payment confirmed</h1>
       <p>${greetingHtml}</p>
       <p>Payment for <strong>${safeTeamName}</strong> has been approved. Your team registration is confirmed.</p>
+      <p>Team check-in code: <strong>${safeTeamCode}</strong></p>
+      <p>Show the QR code in the team leader's IdeaForge profile at event check-in.</p>
       <h2 style="font-size:16px">Team members</h2>
       ${membersHtml}
       <p>See you at IdeaForge!</p>

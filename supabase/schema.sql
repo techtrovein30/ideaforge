@@ -152,8 +152,8 @@ begin
   end if;
 
   v_member_count := jsonb_array_length(p_members);
-  if v_member_count not between 2 and 4 then
-    raise exception 'A team must have between 2 and 4 members';
+  if v_member_count not between 2 and 5 then
+    raise exception 'A team must have between 2 and 5 members';
   end if;
 
   if exists (

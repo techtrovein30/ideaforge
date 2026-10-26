@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import QRCode from "qrcode";
 
 const PAYMENT_BUCKET = "ideaforge-payment-proofs";
 const INITIAL_MEMBER_COUNT = 2;
-const MAX_MEMBER_COUNT = 4;
+const MAX_MEMBER_COUNT = 5;
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase =
@@ -26,6 +27,9 @@ let selectedScreenshot = null;
 let toastTimer;
 let participantUser = null;
 let participantAuthReady = !supabase;
+let adminEmailsData = [];
+let activeEmailFilter = "all";
+let activeParticipantTeam = null;
 
 function clearOAuthTokensFromUrl() {
   const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -40,15 +44,22 @@ function clearOAuthTokensFromUrl() {
 
 function updateParticipantProfile(user) {
   participantUser = user;
+  activeParticipantTeam = null;
   const profileLink = document.querySelector("#profile-nav-link");
   const signedOutPanel = document.querySelector("#profile-signed-out");
   const signedInPanel = document.querySelector("#profile-signed-in");
-  const avatar = document.querySelector("#profile-avatar");
-  const avatarFallback = document.querySelector("#profile-avatar-fallback");
+  const teamCard = document.querySelector("#profile-team-card");
+  const paymentCard = document.querySelector("#profile-payment-card");
+  const teamMessage = document.querySelector("#profile-team-message");
+  const registerLink = document.querySelector("#profile-register-link");
 
   profileLink.textContent = user ? "Profile" : "Sign in";
   signedOutPanel.hidden = Boolean(user);
   signedInPanel.hidden = !user;
+  teamCard.hidden = true;
+  paymentCard.hidden = true;
+  teamMessage.textContent = "";
+  registerLink.hidden = false;
   const teamContactEmail = document.querySelector("#member-0-email");
   if (teamContactEmail) {
     teamContactEmail.value = user?.email ?? "";
@@ -60,16 +71,190 @@ function updateParticipantProfile(user) {
   document.querySelector("#profile-name").textContent =
     metadata.full_name ?? metadata.name ?? user.email ?? "IdeaForge participant";
   document.querySelector("#profile-email").textContent = user.email ?? "";
-
-  const avatarUrl = metadata.avatar_url ?? metadata.picture;
-  avatar.hidden = !avatarUrl;
-  avatarFallback.hidden = Boolean(avatarUrl);
-  if (avatarUrl) {
-    avatar.src = avatarUrl;
-  } else {
-    avatar.removeAttribute("src");
-  }
+  void loadParticipantTeam(user.id);
 }
+
+async function loadParticipantTeam(userId) {
+  const teamCard = document.querySelector("#profile-team-card");
+  const paymentCard = document.querySelector("#profile-payment-card");
+  const teamMessage = document.querySelector("#profile-team-message");
+  const registerLink = document.querySelector("#profile-register-link");
+  const reuploadForm = document.querySelector("#profile-payment-resubmit");
+  if (!supabase || !participantUser || participantUser.id !== userId) return;
+
+  teamMessage.textContent = "Checking for your team…";
+  teamCard.hidden = true;
+  paymentCard.hidden = true;
+  reuploadForm.hidden = true;
+  const { data, error } = await supabase.rpc("ideaforge_get_my_team");
+  if (participantUser?.id !== userId) return;
+  if (error) {
+    console.error("Could not load the participant's IdeaForge team.", error);
+    teamMessage.textContent = "Your team profile is temporarily unavailable. Please reload and try again.";
+    return;
+  }
+
+  const team = data;
+  activeParticipantTeam = team;
+  if (!team) {
+    teamMessage.textContent = "No team is registered with this Google account yet.";
+    return;
+  }
+
+  document.querySelector("#profile-team-name").textContent = team.team_name;
+  document.querySelector("#profile-team-code").textContent = team.team_code;
+  document.querySelector("#profile-team-registered").textContent =
+    team.created_at ? new Date(team.created_at).toLocaleString() : "—";
+
+  const memberList = document.querySelector("#profile-team-members");
+  memberList.replaceChildren();
+  for (const member of team.members ?? []) {
+    const row = document.createElement("div");
+    row.className = "profile-member";
+    const name = document.createElement("strong");
+    name.textContent = `${member.full_name}${member.is_team_contact ? " · Team leader" : ""}`;
+    const details = document.createElement("span");
+    details.textContent = `${member.college_name} · ${member.email} · ${member.mobile_number}`;
+    row.append(name, details);
+    memberList.append(row);
+  }
+
+  const paymentStatus = team.payment_status.replaceAll("_", " ");
+  const paymentStatusElement = document.querySelector("#profile-team-payment");
+  paymentStatusElement.textContent = paymentStatus;
+  paymentStatusElement.dataset.status = team.payment_status;
+  document.querySelector("#profile-payment-utr").textContent = team.payment_utr || "Not submitted";
+  document.querySelector("#profile-payment-submitted").textContent =
+    team.payment_submitted_at ? new Date(team.payment_submitted_at).toLocaleString() : "Not submitted";
+  const proofContainer = document.querySelector("#profile-payment-proof");
+  const proofImage = document.querySelector("#profile-payment-proof-image");
+  const proofMessage = document.querySelector("#profile-payment-proof-message");
+  proofContainer.hidden = true;
+  proofImage.removeAttribute("src");
+  proofImage.hidden = false;
+  proofMessage.hidden = true;
+  if (team.screenshot_path) {
+    const { data: proofData, error: proofError } = await supabase.storage
+      .from(PAYMENT_BUCKET)
+      .createSignedUrl(team.screenshot_path, 300);
+    if (participantUser?.id !== userId) return;
+    if (proofError) {
+      console.error("Could not create a signed URL for the participant's payment proof.", proofError);
+      proofContainer.hidden = false;
+      proofImage.hidden = true;
+      proofMessage.textContent = "Your payment proof preview is temporarily unavailable.";
+      proofMessage.hidden = false;
+    } else {
+      proofImage.src = proofData.signedUrl;
+      proofContainer.hidden = false;
+    }
+  }
+  paymentCard.hidden = false;
+
+  if (team.can_resubmit === true) {
+    document.querySelector("#profile-payment-note").textContent =
+      team.payment_note || "Please upload a clear payment proof and verify the UTR before resubmitting.";
+    reuploadForm.hidden = false;
+  }
+  try {
+    await QRCode.toCanvas(document.querySelector("#profile-team-qr"), team.team_code, {
+      width: 190,
+      margin: 1,
+      color: { dark: "#090909", light: "#ffffff" },
+    });
+  } catch (qrError) {
+    console.error("Could not generate the participant's team QR code.", qrError);
+    teamMessage.textContent = "Your team is registered, but its QR code could not be generated. Reload to try again.";
+    return;
+  }
+
+  teamCard.hidden = false;
+  teamMessage.textContent = "";
+  registerLink.hidden = true;
+}
+
+document.querySelector("#profile-payment-screenshot").addEventListener("change", (event) => {
+  const file = event.currentTarget.files?.[0];
+  const preview = document.querySelector("#profile-payment-preview");
+  preview.replaceChildren();
+  preview.hidden = true;
+  if (!file) return;
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+    event.currentTarget.value = "";
+    showToast("Choose a PNG, JPG, or WEBP image.");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    event.currentTarget.value = "";
+    showToast("The screenshot must be 5 MB or smaller.");
+    return;
+  }
+  const image = document.createElement("img");
+  image.src = URL.createObjectURL(file);
+  image.alt = "Preview of the replacement payment screenshot";
+  image.addEventListener("load", () => URL.revokeObjectURL(image.src), { once: true });
+  preview.append(image);
+  preview.hidden = false;
+});
+
+document.querySelector("#profile-payment-resubmit").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!supabase || !activeParticipantTeam) return;
+  if (activeParticipantTeam.can_resubmit !== true) {
+    showToast("Payment resubmission is available only after an admin requests a re-upload.");
+    return;
+  }
+  if (!form.reportValidity()) return;
+  const fileInput = document.querySelector("#profile-payment-screenshot");
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("The screenshot must be 5 MB or smaller.");
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  submitButton.textContent = "Uploading new proof…";
+  const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storagePath = `${activeParticipantTeam.team_id}/${crypto.randomUUID()}-${safeFileName}`;
+  try {
+    const { error: uploadError } = await supabase.storage
+      .from(PAYMENT_BUCKET)
+      .upload(storagePath, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+        upsert: false,
+      });
+    if (uploadError) {
+      console.error("Replacement IdeaForge payment proof upload failed.", uploadError);
+      showToast(uploadError.message || "Could not upload the new payment proof.");
+      return;
+    }
+
+    const { error } = await supabase.rpc("ideaforge_submit_payment", {
+      p_team_id: activeParticipantTeam.team_id,
+      p_utr: String(new FormData(form).get("utr")).trim(),
+      p_screenshot_path: storagePath,
+    });
+    if (error) {
+      console.error("Could not resubmit IdeaForge payment proof.", error);
+      showToast(error.message || "Could not resubmit payment proof.");
+      return;
+    }
+    form.reset();
+    document.querySelector("#profile-payment-preview").hidden = true;
+    await loadParticipantTeam(participantUser.id);
+    showToast("New payment proof submitted for admin review.");
+  } catch (error) {
+    console.error("Unexpected error resubmitting IdeaForge payment proof.", error);
+    showToast("Could not resubmit payment proof because of a network error.");
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = "Resubmit payment proof <span>↗</span>";
+  }
+});
 
 if (supabase) {
   supabase.auth.onAuthStateChange((event, session) => {
@@ -315,7 +500,7 @@ teamForm.addEventListener("submit", async (event) => {
   }
   const members = getMembersFromForm();
   if (members.length < INITIAL_MEMBER_COUNT || members.length > MAX_MEMBER_COUNT) {
-    showToast("A team must have between 2 and 4 members.");
+    showToast("A team must have between 2 and 5 members.");
     return;
   }
   const submitButton = teamForm.querySelector('button[type="submit"]');
@@ -452,7 +637,23 @@ paymentForm.addEventListener("submit", async (event) => {
 
     const teamName = draftTeam.teamName;
     document.querySelector("#success-message").textContent =
-      `${teamName} has been registered. Your payment screenshot is securely uploaded and awaiting admin review.`;
+      `${teamName} is registered. Your payment proof has been submitted and is awaiting admin review.`;
+    const registrationCodeWrap = document.querySelector("#success-registration-wrap");
+    registrationCodeWrap.hidden = true;
+    try {
+      const { data: registeredTeam, error: teamProfileError } = await supabase.rpc(
+        "ideaforge_get_my_team",
+      );
+      if (teamProfileError) {
+        console.error("Could not load the new team's registration code.", teamProfileError);
+      } else if (registeredTeam?.team_code) {
+        document.querySelector("#success-registration-code").textContent =
+          registeredTeam.team_code;
+        registrationCodeWrap.hidden = false;
+      }
+    } catch (error) {
+      console.error("Could not load the new team's registration code.", error);
+    }
     if (selectedScreenshot.previewUrl) {
       URL.revokeObjectURL(selectedScreenshot.previewUrl);
     }
@@ -470,6 +671,18 @@ paymentForm.addEventListener("submit", async (event) => {
   }
 });
 
+document.querySelector("#copy-registration-code").addEventListener("click", async () => {
+  const code = document.querySelector("#success-registration-code").textContent;
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    showToast("Team registration code copied.");
+  } catch (error) {
+    console.error("Could not copy the team registration code.", error);
+    showToast("Could not copy the code. Please select and copy it manually.");
+  }
+});
+
 let activeAdmin = null;
 
 function showAdminConnectionError(message) {
@@ -483,6 +696,29 @@ function showAdminLogin(message, canSignOut = false) {
   document.querySelector("#admin-login-panel").hidden = false;
   document.querySelector("#admin-login-message").textContent = message;
   document.querySelector("#admin-sign-out").hidden = !canSignOut;
+}
+
+function setAdminPage(pageName) {
+  const pageDetails = {
+    overview: ["Dashboard overview", "Here’s what’s happening with your hackathon today."],
+    payments: ["Payments", "Review registration details, payment references, and proofs."],
+    users: ["Registered users", "Find participants and see their team and payment status."],
+    checkin: ["Team check-in", "Scan a team QR code or enter its code to record attendance."],
+    emails: ["Gmail outbox", "Review queued confirmations and retry eligible failures."],
+  };
+  for (const page of document.querySelectorAll(".admin-page")) {
+    page.hidden = page.id !== `admin-${pageName}-page`;
+  }
+  for (const button of document.querySelectorAll(".admin-nav-button")) {
+    button.classList.toggle("active", button.dataset.adminPage === pageName);
+  }
+  const [title, description] = pageDetails[pageName] ?? pageDetails.overview;
+  document.querySelector("#admin-current-page").textContent = title;
+  document.querySelector("#admin-page-title").textContent = title;
+  document.querySelector("#admin-page-description").textContent = description;
+  document.querySelector("#admin-sidebar").classList.remove("open");
+  document.querySelector("#admin-menu-toggle").setAttribute("aria-expanded", "false");
+  if (pageName !== "checkin") stopCheckinScanner();
 }
 
 async function renderAdmin() {
@@ -539,6 +775,7 @@ async function renderAdmin() {
   activeAdmin = userData.user;
   signOutButton.hidden = false;
   dashboard.hidden = false;
+  setAdminPage("overview");
   await loadAdminDashboard();
 }
 
@@ -553,11 +790,12 @@ async function loadAdminDashboard() {
       .single(),
     supabase
       .from("ideaforge_teams")
-      .select("id, team_name, payment_status, payment_utr, screenshot_path, created_at, ideaforge_members(id, full_name, college_name, mobile_number, email, is_team_contact)")
+      .select("id, team_name, team_code, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, email, is_team_contact)")
       .order("created_at", { ascending: false }),
     supabase
       .from("ideaforge_email_outbox")
-      .select("id, team_id, status, attempt_count, retryable, last_error, sent_at"),
+      .select("id, team_id, status, attempt_count, retryable, last_error, sent_at, recipient_email, recipient_name, created_at")
+      .order("created_at", { ascending: false }),
   ]);
 
   if (settingsResult.error) {
@@ -567,7 +805,7 @@ async function loadAdminDashboard() {
   }
   if (teamsResult.error) {
     console.error("Could not load IdeaForge registrations.", teamsResult.error);
-    showAdminConnectionError("Could not load registrations. Check your schema and admin permissions.");
+    showAdminConnectionError("Could not load registrations. Apply the IdeaForge admin/check-in migration and verify admin permissions.");
     return;
   }
   if (emailResult.error) {
@@ -590,6 +828,10 @@ async function loadAdminDashboard() {
     String(teams.filter((team) => team.payment_status === "pending_review").length);
   document.querySelector("#approved-payments").textContent =
     String(teams.filter((team) => team.payment_status === "approved").length);
+  document.querySelector("#checked-in-teams").textContent =
+    String(teams.filter((team) => team.checked_in_at).length);
+  renderAdminUsers(teams);
+  renderAdminEmails(emailResult.data ?? [], teams);
 
   const toggle = document.querySelector("#toggle-registration");
   toggle.textContent = settingsResult.data.registration_open ? "Close registration" : "Open registration";
@@ -597,15 +839,16 @@ async function loadAdminDashboard() {
 
   const list = document.querySelector("#admin-team-list");
   list.replaceChildren();
-  document.querySelector("#admin-empty").hidden = teams.length > 0;
+  document.querySelector("#admin-payment-count").textContent =
+    `${teams.length} team${teams.length === 1 ? "" : "s"}`;
 
   for (const team of teams) {
     const members = team.ideaforge_members ?? [];
     const statusLabels = {
       awaiting_payment: "AWAITING PAYMENT",
-      pending_review: "PENDING REVIEW",
-      approved: "APPROVED",
-      rejected: "REJECTED",
+      pending_review: "PENDING",
+      approved: "PAID",
+      rejected: "RE-UPLOAD REQUESTED",
     };
     const isPending = team.payment_status === "pending_review";
     const email = emailByTeam.get(team.id);
@@ -628,13 +871,13 @@ async function loadAdminDashboard() {
         <span>${escapeHtml(member.college_name)} · ${escapeHtml(member.mobile_number)}</span>
         <span>${escapeHtml(member.email)}</span>
       </div>`).join("");
+    const teamContact = members.find((member) => member.is_team_contact) ?? members[0];
     const paymentHtml = team.payment_utr
-      ? `<h4>PAYMENT / UTR</h4>
-         <span class="utr-value">${escapeHtml(team.payment_utr)}</span>
+      ? `<span class="utr-value">${escapeHtml(team.payment_utr)}</span>
          ${screenshotUrl
-           ? `<a href="${escapeHtml(screenshotUrl)}" target="_blank" rel="noopener noreferrer"><img class="payment-image" src="${escapeHtml(screenshotUrl)}" alt="Payment screenshot for ${escapeHtml(team.team_name)}" /></a>`
-           : `<p class="prototype-note">Screenshot unavailable. Check the private bucket and its admin policy.</p>`}`
-      : "<h4>PAYMENT</h4><span class=\"prototype-note\">Payment proof not submitted yet.</span>";
+           ? `<button class="payment-proof-link" type="button" data-payment-proof data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}" data-team-code="${escapeHtml(team.team_code)}" data-contact-name="${escapeHtml(teamContact?.full_name ?? "—")}" data-utr="${escapeHtml(team.payment_utr)}" data-submitted-at="${escapeHtml(team.payment_submitted_at ?? "")}" data-screenshot-url="${escapeHtml(screenshotUrl)}">▧ View screenshot</button>`
+           : `<span class="prototype-note">Screenshot unavailable</span>`}`
+      : "<span class=\"prototype-note\">Not submitted</span>";
     const emailStatusLabels = {
       pending: "Queued",
       sending: "Sending",
@@ -656,18 +899,148 @@ async function loadAdminDashboard() {
       : "";
     const card = document.createElement("article");
     card.className = "admin-team-card";
+    card.dataset.paymentStatus = team.payment_status;
     card.innerHTML = `
-      <div class="admin-team-header">
-        <div><h3>${escapeHtml(team.team_name)}</h3><p>${members.length} participants · Registered ${new Date(team.created_at).toLocaleString()}</p></div>
-        <span class="status-pill ${team.payment_status === "approved" ? "approved" : ""}">${statusLabels[team.payment_status] ?? "UNKNOWN"}</span>
-      </div>
-      <div class="admin-team-body"><section><h4>MEMBER PROFILES</h4>${membersHtml}</section><section>${paymentHtml}</section><section><h4>EMAIL CONFIRMATION</h4><span class="prototype-note">${emailStatus}</span>${emailError}${emailDeliveryNote}</section></div>
-      <div class="admin-actions">
-        ${isPending ? `<button class="small-button approve" type="button" data-action="approve" data-team-id="${escapeHtml(team.id)}">Verify &amp; approve payment</button><button class="small-button" type="button" data-action="reject" data-team-id="${escapeHtml(team.id)}">Reject payment</button>` : ""}
-        ${email?.status === "failed" && email.retryable ? `<button class="small-button" type="button" data-action="retry-email" data-email-id="${escapeHtml(email.id)}">Retry confirmation</button>` : ""}
+      <div class="admin-payment-row">
+        <div class="payment-team-cell"><strong>${escapeHtml(team.team_name)}</strong><span>${escapeHtml(team.team_code)}</span></div>
+        <div class="payment-contact-cell"><strong>${escapeHtml(teamContact?.full_name ?? "—")}</strong><span>${escapeHtml(teamContact?.email ?? "No contact email")}</span></div>
+        <div class="payment-proof-cell">${paymentHtml}</div>
+        <div><span class="status-pill ${team.payment_status === "approved" ? "approved" : team.payment_status === "rejected" ? "reupload-requested" : ""}">${statusLabels[team.payment_status] ?? "UNKNOWN"}</span></div>
+        <div class="payment-date-cell">${team.payment_submitted_at ? new Date(team.payment_submitted_at).toLocaleString() : "—"}</div>
+        <div class="admin-payment-actions">
+          ${isPending ? `<button class="small-button approve" type="button" data-action="approve" data-team-id="${escapeHtml(team.id)}">✓ Mark paid</button><button class="small-button request-reupload" type="button" data-action="request-reupload" data-team-id="${escapeHtml(team.id)}">↻ Request re-upload</button>` : team.payment_status === "approved" ? '<span class="payment-action-complete">✓ Payment verified</span>' : ""}
+        </div>
+        <details class="admin-payment-details">
+          <summary>Team details</summary>
+          <div class="admin-payment-detail-body"><section><h4>TEAM MEMBERS</h4>${membersHtml}</section><section><h4>PAYMENT PROOF</h4>${paymentHtml}</section><section><h4>EMAIL CONFIRMATION</h4><span class="prototype-note">${emailStatus}</span>${emailError}${emailDeliveryNote}</section></div>
+        </details>
       </div>`;
     list.append(card);
   }
+  filterAdminPayments();
+}
+
+function renderAdminUsers(teams) {
+  const list = document.querySelector("#admin-user-list");
+  const search = document.querySelector("#admin-user-search");
+  const query = search.value.trim().toLowerCase();
+  const members = teams.flatMap((team) =>
+    (team.ideaforge_members ?? []).map((member) => ({
+      ...member,
+      teamName: team.team_name,
+      paymentStatus: team.payment_status,
+    })),
+  );
+
+  document.querySelector("#admin-user-count").textContent =
+    `${members.length} participant${members.length === 1 ? "" : "s"}`;
+  list.innerHTML = members.map((member) => {
+    const searchText = [
+      member.full_name,
+      member.email,
+      member.college_name,
+      member.mobile_number,
+      member.teamName,
+    ].join(" ").toLowerCase();
+    return `<article class="admin-user-row" data-search="${escapeHtml(searchText)}">
+      <div><strong>${escapeHtml(member.full_name)}${member.is_team_contact ? " · Team leader" : ""}</strong><span>${escapeHtml(member.teamName)}</span></div>
+      <div><span>${escapeHtml(member.email)}</span><span>${escapeHtml(member.mobile_number)}</span></div>
+      <div><span>${escapeHtml(member.college_name)}</span><span class="status-pill ${member.paymentStatus === "approved" ? "approved" : ""}">${escapeHtml(member.paymentStatus.replaceAll("_", " "))}</span></div>
+    </article>`;
+  }).join("");
+  list.querySelectorAll(".admin-user-row").forEach((row) => {
+    row.hidden = query !== "" && !row.dataset.search.includes(query);
+  });
+  document.querySelector("#admin-users-empty").hidden =
+    [...list.children].some((row) => !row.hidden);
+}
+
+function renderAdminEmails(emails, teams) {
+  adminEmailsData = emails;
+  const teamById = new Map(teams.map((team) => [team.id, team]));
+  const list = document.querySelector("#admin-email-list");
+  const statusLabels = {
+    pending: "Queued",
+    sending: "Sending",
+    sent: "Accepted by Gmail",
+    failed: "Failed",
+  };
+
+  const counts = {
+    pending: emails.filter((email) => email.status === "pending").length,
+    sending: emails.filter((email) => email.status === "sending").length,
+    sent: emails.filter((email) => email.status === "sent").length,
+    failed: emails.filter((email) => email.status === "failed").length,
+  };
+  for (const status of Object.keys(counts)) {
+    document.querySelector(`#email-${status}-count`).textContent = String(counts[status]);
+    document.querySelector(`#email-${status}-tab-count`).textContent = String(counts[status]);
+  }
+  document.querySelector("#email-all-tab-count").textContent = String(emails.length);
+  list.innerHTML = emails.map((email) => {
+    const team = teamById.get(email.team_id);
+    const status = statusLabels[email.status] ?? "Unknown";
+    const retryButton = email.status === "failed" && email.retryable
+      ? `<button class="small-button" type="button" data-action="retry-email" data-email-id="${escapeHtml(email.id)}">Retry email</button>`
+      : "";
+    const searchText = [
+      team?.team_name ?? "",
+      team?.team_code ?? "",
+      email.recipient_name ?? "",
+      email.recipient_email ?? "",
+    ].join(" ").toLowerCase();
+    return `<article class="admin-email-row" data-status="${escapeHtml(email.status)}" data-search="${escapeHtml(searchText)}">
+      <div><span class="status-pill ${email.status === "sent" ? "approved" : ""}">${escapeHtml(status)}</span></div>
+      <div><strong>${escapeHtml(team?.team_name ?? "Unknown team")}</strong><span>${escapeHtml(team?.team_code ?? "No team code")}</span></div>
+      <div><strong>${escapeHtml(email.recipient_name ?? "Team leader")}</strong><span>${escapeHtml(email.recipient_email ?? "No recipient")}</span></div>
+      <div><span>${email.attempt_count} attempt${email.attempt_count === 1 ? "" : "s"}</span><span>${new Date(email.created_at).toLocaleString()}</span>${email.last_error ? `<span class="email-error">${escapeHtml(email.last_error)}</span>` : ""}${email.status === "sent" ? "<span>Accepted by Gmail</span>" : ""}</div>
+      <div>${retryButton || '<span class="prototype-note">—</span>'}</div>
+    </article>`;
+  }).join("");
+  filterAdminEmails();
+}
+
+function filterAdminPayments() {
+  const query = document.querySelector("#admin-payment-search").value.trim().toLowerCase();
+  const status = document.querySelector("#admin-payment-filter").value;
+  const cards = [...document.querySelectorAll("#admin-team-list .admin-team-card")];
+  for (const card of cards) {
+    card.hidden = (status !== "all" && card.dataset.paymentStatus !== status) ||
+      (query !== "" && !card.textContent.toLowerCase().includes(query));
+  }
+  document.querySelector("#admin-empty").hidden = cards.some((card) => !card.hidden);
+}
+
+function filterAdminEmails() {
+  const query = document.querySelector("#admin-email-search").value.trim().toLowerCase();
+  const rows = [...document.querySelectorAll("#admin-email-list .admin-email-row")];
+  for (const row of rows) {
+    row.hidden = (activeEmailFilter !== "all" && row.dataset.status !== activeEmailFilter) ||
+      (query !== "" && !row.dataset.search.includes(query));
+  }
+  document.querySelector("#admin-email-empty").hidden = rows.some((row) => !row.hidden);
+}
+
+function exportSentEmails() {
+  const sent = adminEmailsData.filter((email) => email.status === "sent");
+  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const rows = [
+    ["Recipient", "Name", "Status", "Attempts", "Sent at"],
+    ...sent.map((email) => [
+      email.recipient_email,
+      email.recipient_name,
+      email.status,
+      email.attempt_count,
+      email.sent_at,
+    ]),
+  ];
+  const csv = rows.map((row) => row.map(quote).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "ideaforge-sent-confirmations.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 document.querySelector("#admin-google-sign-in").addEventListener("click", async (event) => {
@@ -698,6 +1071,7 @@ document.querySelector("#admin-google-sign-in").addEventListener("click", async 
 });
 
 document.querySelector("#admin-sign-out").addEventListener("click", async () => {
+  stopCheckinScanner();
   const { error } = await supabase.auth.signOut();
   if (error) {
     console.error("Could not sign out IdeaForge admin.", error);
@@ -741,44 +1115,273 @@ document.querySelector("#toggle-registration").addEventListener("click", async (
 });
 
 document.querySelector("#admin-team-list").addEventListener("click", async (event) => {
+  const proofButton = event.target.closest("button[data-payment-proof]");
+  if (proofButton) {
+    openPaymentProof(proofButton);
+    return;
+  }
+
   const button = event.target.closest("button[data-action]");
   if (!button || !activeAdmin) return;
   if (button.dataset.action === "retry-email") {
+    await retryAdminEmail(button);
+    return;
+  }
+
+  if (button.dataset.action === "request-reupload") {
+    if (!window.confirm("Request a new payment screenshot and UTR from this team leader?")) return;
     button.disabled = true;
-    const { data, error } = await supabase.rpc("ideaforge_email_retry", {
-      p_id: button.dataset.emailId,
+    const { error } = await supabase.rpc("ideaforge_request_payment_reupload", {
+      p_team_id: button.dataset.teamId,
+      p_note: "Please upload a clear payment screenshot and verify the UTR before resubmitting.",
     });
     if (error) {
-      console.error("Could not retry IdeaForge confirmation email.", error);
-      showToast(error.message || "Could not retry the confirmation email.", true);
+      console.error("Could not request an IdeaForge payment re-upload.", error);
+      showToast(error.message || "Could not request a new payment proof.", true);
       button.disabled = false;
       return;
     }
-    if (data !== true) {
-      await loadAdminDashboard();
-      showToast("This email is no longer eligible for a safe retry.", true);
-      return;
-    }
     await loadAdminDashboard();
-    showToast("Confirmation email queued for retry.", true);
+    showToast("Re-upload requested. The team leader can submit new proof from their profile.", true);
     return;
   }
 
   button.disabled = true;
-  const decision = button.dataset.action === "approve" ? "approved" : "rejected";
   const { error } = await supabase.rpc("ideaforge_review_payment", {
     p_team_id: button.dataset.teamId,
-    p_decision: decision,
+    p_decision: "approved",
     p_note: null,
   });
   if (error) {
-    console.error(`Could not ${decision} IdeaForge payment.`, error);
-    showToast(error.message || `Could not ${decision} payment.`, true);
+    console.error("Could not approve IdeaForge payment.", error);
+    showToast(error.message || "Could not mark payment as paid.", true);
     button.disabled = false;
     return;
   }
   await loadAdminDashboard();
-  showToast(`Payment ${decision}.`, true);
+  showToast("Payment marked as paid.", true);
+});
+
+function openPaymentProof(button) {
+  const dialog = document.querySelector("#payment-proof-dialog");
+  const image = document.querySelector("#payment-proof-image");
+  const submittedAt = button.dataset.submittedAt
+    ? new Date(button.dataset.submittedAt).toLocaleString()
+    : "—";
+  const approveButton = document.querySelector("#payment-proof-mark-paid");
+  const reuploadButton = document.querySelector("#payment-proof-request-reupload");
+
+  document.querySelector("#payment-proof-title").textContent =
+    `Payment Proof · ${button.dataset.contactName}`;
+  document.querySelector("#payment-proof-subtitle").textContent =
+    `Registration ${button.dataset.teamCode} · ${button.dataset.teamName}`;
+  document.querySelector("#payment-proof-utr").textContent = button.dataset.utr;
+  document.querySelector("#payment-proof-created-at").textContent = submittedAt;
+  image.src = button.dataset.screenshotUrl;
+  image.alt = `Payment proof for ${button.dataset.teamName}`;
+  approveButton.dataset.teamId = button.dataset.teamId;
+  reuploadButton.dataset.teamId = button.dataset.teamId;
+  dialog.classList.remove("is-full-size");
+
+  const isPending =
+    button.closest(".admin-team-card")?.dataset.paymentStatus === "pending_review";
+  approveButton.hidden = !isPending;
+  reuploadButton.hidden = !isPending;
+  dialog.showModal();
+}
+
+const paymentProofDialog = document.querySelector("#payment-proof-dialog");
+paymentProofDialog.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-proof-dialog-action]");
+  if (!actionButton) {
+    if (event.target === paymentProofDialog) paymentProofDialog.close();
+    return;
+  }
+
+  const action = actionButton.dataset.proofDialogAction;
+  if (action === "close") {
+    paymentProofDialog.close();
+  } else if (action === "copy-utr") {
+    navigator.clipboard.writeText(
+      document.querySelector("#payment-proof-utr").textContent,
+    ).then(
+      () => showToast("UTR copied to clipboard.", true),
+      (error) => {
+        console.error("Could not copy the payment UTR.", error);
+        showToast("Could not copy the UTR. Please select and copy it manually.", true);
+      },
+    );
+  } else if (action === "full-size") {
+    paymentProofDialog.classList.toggle("is-full-size");
+    actionButton.textContent = paymentProofDialog.classList.contains("is-full-size")
+      ? "↙ Fit to screen"
+      : "↗ Full Size";
+  } else if (action === "approve" || action === "request-reupload") {
+    const rowButton = document.querySelector(
+      `#admin-team-list button[data-action="${action}"][data-team-id="${CSS.escape(actionButton.dataset.teamId)}"]`,
+    );
+    rowButton?.click();
+    if (rowButton?.disabled) paymentProofDialog.close();
+  }
+});
+
+async function retryAdminEmail(button) {
+  button.disabled = true;
+  const { data, error } = await supabase.rpc("ideaforge_email_retry", {
+    p_id: button.dataset.emailId,
+  });
+  if (error) {
+    console.error("Could not retry IdeaForge confirmation email.", error);
+    showToast(error.message || "Could not retry the confirmation email.", true);
+    button.disabled = false;
+    return;
+  }
+  if (data !== true) {
+    await loadAdminDashboard();
+    showToast("This email is no longer eligible for a safe retry.", true);
+    return;
+  }
+  await loadAdminDashboard();
+  showToast("Confirmation email queued for retry.", true);
+}
+
+document.querySelector("#admin-email-list").addEventListener("click", async (event) => {
+  const button = event.target.closest('button[data-action="retry-email"]');
+  if (button && activeAdmin) await retryAdminEmail(button);
+});
+
+document.querySelector(".admin-nav").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-admin-page]");
+  if (button) setAdminPage(button.dataset.adminPage);
+});
+
+document.querySelector("#admin-dashboard").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-admin-page]");
+  if (button) setAdminPage(button.dataset.adminPage);
+});
+
+document.querySelector("#admin-menu-toggle").addEventListener("click", (event) => {
+  const sidebar = document.querySelector("#admin-sidebar");
+  const open = sidebar.classList.toggle("open");
+  event.currentTarget.setAttribute("aria-expanded", String(open));
+});
+
+document.querySelector("#admin-payment-search").addEventListener("input", filterAdminPayments);
+document.querySelector("#admin-payment-filter").addEventListener("change", filterAdminPayments);
+document.querySelector("#admin-email-search").addEventListener("input", filterAdminEmails);
+document.querySelector(".admin-outbox-filters").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-email-filter]");
+  if (!button) return;
+  activeEmailFilter = button.dataset.emailFilter;
+  for (const tab of document.querySelectorAll(".admin-filter-tab")) {
+    tab.classList.toggle("active", tab === button);
+  }
+  filterAdminEmails();
+});
+document.querySelector("#export-sent-emails").addEventListener("click", exportSentEmails);
+
+document.querySelector("#admin-user-search").addEventListener("input", (event) => {
+  const query = event.currentTarget.value.trim().toLowerCase();
+  const rows = [...document.querySelectorAll("#admin-user-list .admin-user-row")];
+  for (const row of rows) {
+    row.hidden = query !== "" && !row.dataset.search.includes(query);
+  }
+  document.querySelector("#admin-users-empty").hidden = rows.some((row) => !row.hidden);
+});
+
+document.querySelector("#refresh-email-outbox").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    await loadAdminDashboard();
+  } finally {
+    button.disabled = false;
+  }
+});
+
+let checkinScannerControls = null;
+
+function stopCheckinScanner() {
+  if (checkinScannerControls) {
+    checkinScannerControls.stop();
+    checkinScannerControls = null;
+  }
+  document.querySelector("#start-checkin-scanner").disabled = false;
+  document.querySelector("#stop-checkin-scanner").disabled = true;
+}
+
+document.querySelector("#stop-checkin-scanner").addEventListener("click", stopCheckinScanner);
+
+document.querySelector("#start-checkin-scanner").addEventListener("click", async (event) => {
+  if (!activeAdmin) {
+    showToast("Sign in with an approved admin account first.", true);
+    return;
+  }
+
+  const startButton = event.currentTarget;
+  const message = document.querySelector("#checkin-scanner-message");
+  startButton.disabled = true;
+  message.textContent = "Starting camera…";
+  try {
+    const { BrowserQRCodeReader } = await import("@zxing/browser");
+    const reader = new BrowserQRCodeReader();
+    checkinScannerControls = await reader.decodeFromVideoDevice(
+      undefined,
+      document.querySelector("#checkin-video"),
+      (result) => {
+        if (!result) return;
+        stopCheckinScanner();
+        const form = document.querySelector("#checkin-form");
+        form.elements.teamCode.value = result.getText();
+        form.requestSubmit();
+      },
+    );
+    document.querySelector("#stop-checkin-scanner").disabled = false;
+    message.textContent = "Point the camera at the team QR code.";
+  } catch (error) {
+    console.error("Could not start the IdeaForge QR scanner.", error);
+    message.textContent = error instanceof Error
+      ? `Could not start camera: ${error.message}`
+      : "Could not start camera. Check permissions and try again.";
+    startButton.disabled = false;
+  }
+});
+
+document.querySelector("#checkin-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!activeAdmin) {
+    showToast("Sign in with an approved admin account first.", true);
+    return;
+  }
+
+  const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const code = String(new FormData(form).get("teamCode")).trim();
+  const result = document.querySelector("#checkin-result");
+  submitButton.disabled = true;
+  result.hidden = false;
+  result.textContent = "Checking team code…";
+  try {
+    const { data, error } = await supabase.rpc("ideaforge_check_in_team", {
+      p_team_code: code,
+    });
+    if (error) {
+      console.error("Could not check in IdeaForge team.", error);
+      result.textContent = error.message || "Could not check in this team.";
+      return;
+    }
+
+    result.textContent = data.already_checked_in
+      ? `${data.team_name} was already checked in at ${new Date(data.checked_in_at).toLocaleString()}.`
+      : `${data.team_name} checked in successfully · ${data.attendee_count} participant${data.attendee_count === 1 ? "" : "s"}.`;
+    await loadAdminDashboard();
+    form.elements.teamCode.value = "";
+  } catch (error) {
+    console.error("Unexpected error checking in IdeaForge team.", error);
+    result.textContent = "Check-in failed because of a network error. Please try again.";
+  } finally {
+    submitButton.disabled = false;
+  }
 });
 
 function isAdminRoute() {
@@ -796,8 +1399,12 @@ function renderRoute() {
     return;
   }
 
+  stopCheckinScanner();
   const isProfile = window.location.hash === "#profile";
   profilePage.hidden = !isProfile;
+  if (isProfile && participantUser) {
+    void loadParticipantTeam(participantUser.id);
+  }
   for (const section of publicView.querySelectorAll("main > section:not(#profile-page)")) {
     section.hidden = isProfile;
   }

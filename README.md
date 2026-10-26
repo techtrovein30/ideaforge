@@ -38,6 +38,39 @@ account's email for the team contact. The admin route also uses Google OAuth
 and checks the `ideaforge_admins` table before showing live registration data
 or controls.
 
+The admin console includes payment review, registration totals, a searchable
+participant directory, team check-in by QR scan or team code, and a Gmail
+confirmation outbox with safe retry controls. Apply
+[`supabase/migrations/20261026210000_ideaforge_admin_checkin.sql`](./supabase/migrations/20261026210000_ideaforge_admin_checkin.sql)
+after the base schema and email-confirmation migration. It assigns each team a
+unique code, displays its QR in the signed-in team leader's profile, and adds
+admin-only check-in recording. The payment approval email includes the team
+code; redeploy the email-worker Edge Function after applying the migration.
+
+Apply
+[`supabase/migrations/20261026220000_ideaforge_payment_reupload.sql`](./supabase/migrations/20261026220000_ideaforge_payment_reupload.sql)
+after the admin/check-in migration to enable admin re-upload requests and
+authenticated team-leader payment resubmission. A requested team can upload a
+replacement UTR and screenshot from the team leader's profile.
+
+Apply
+[`supabase/migrations/20261026230000_ideaforge_short_team_codes.sql`](./supabase/migrations/20261026230000_ideaforge_short_team_codes.sql)
+after the payment re-upload migration to generate shorter team codes for new
+registrations. Codes use the format `IF-ABC234`; existing team codes are not
+changed.
+
+Apply
+[`supabase/migrations/20261026240000_ideaforge_participant_profile.sql`](./supabase/migrations/20261026240000_ideaforge_participant_profile.sql)
+after the short-team-code migration to show the signed-in team leader's
+registration time, member roster, payment details, and check-in QR on their
+profile. It also restricts replacement payment submissions to teams whose
+latest admin review explicitly requested a re-upload.
+
+Apply
+[`supabase/migrations/20261026250000_ideaforge_2k26_rules_and_team_limit.sql`](./supabase/migrations/20261026250000_ideaforge_2k26_rules_and_team_limit.sql)
+after the participant-profile migration to update the registration limit to
+five members. The website publishes the IDEAFORGE 2K26 participant rules.
+
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)
 to require participant sign-in for team registration and match the team
@@ -73,5 +106,8 @@ first. The scheduler runs every five minutes; the database enforces a
 concurrency-safe 200-message rolling 24-hour cap.
 
 The worker records Gmail API acceptance, which is not proof of inbox delivery.
-Sending, deployment, scheduler setup, and migrations remain pending explicit
-approval. For sender/OAuth setup requirements, see [URLs needed](./URLs%20needed.md).
+Email sending, deployment, scheduler setup, and migrations remain pending
+explicit approval. The Gmail outbox page can show and retry eligible failures,
+but queued messages are sent only when the Edge Function and scheduler are
+deployed and enabled. For sender/OAuth setup requirements, see
+[URLs needed](./URLs%20needed.md).

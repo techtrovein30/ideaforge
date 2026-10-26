@@ -5,6 +5,7 @@ export interface ClaimedEmail {
   recipient_email: string | null;
   recipient_name: string | null;
   team_name: string;
+  team_code: string;
   member_names: string[] | null;
   attempt_count: number;
 }
