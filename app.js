@@ -310,7 +310,7 @@ if (supabase) {
     participantAuthReady = true;
     window.setTimeout(() => {
       if (isAdminRoute()) {
-        if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
+        if (!session || event === "SIGNED_IN" || event === "INITIAL_SESSION") {
           void renderAdmin();
         }
       } else if (session && event === "SIGNED_IN") {
@@ -823,12 +823,20 @@ document.querySelector("#copy-registration-code").addEventListener("click", asyn
 
 let activeAdmin = null;
 
+function setAdminAuthenticated(isAuthenticated) {
+  adminView.classList.toggle("admin-authenticated", isAuthenticated);
+}
+
 function showAdminConnectionError(message) {
+  setAdminAuthenticated(false);
+  document.querySelector("#admin-dashboard").hidden = true;
+  document.querySelector("#admin-login-panel").hidden = true;
   document.querySelector("#admin-connection-error").hidden = false;
   document.querySelector("#admin-connection-message").textContent = message;
 }
 
 function showAdminLogin(message, canSignOut = false) {
+  setAdminAuthenticated(false);
   document.querySelector("#admin-dashboard").hidden = true;
   document.querySelector("#admin-connection-error").hidden = true;
   document.querySelector("#admin-login-panel").hidden = false;
@@ -864,9 +872,12 @@ async function renderAdmin() {
   const connectionError = document.querySelector("#admin-connection-error");
   const signOutButton = document.querySelector("#admin-sign-out");
 
+  activeAdmin = null;
+  setAdminAuthenticated(false);
   loginPanel.hidden = true;
   dashboard.hidden = true;
   connectionError.hidden = true;
+  signOutButton.hidden = true;
 
   if (!supabase) {
     showAdminConnectionError("Supabase is not configured for this deployment.");
@@ -910,6 +921,7 @@ async function renderAdmin() {
   }
 
   activeAdmin = userData.user;
+  setAdminAuthenticated(true);
   signOutButton.hidden = false;
   dashboard.hidden = false;
   setAdminPage("overview");
@@ -1211,10 +1223,12 @@ document.querySelector("#admin-google-sign-in").addEventListener("click", async 
 
 document.querySelector("#admin-sign-out").addEventListener("click", async () => {
   stopParticipantCheckinScanner();
+  setAdminAuthenticated(false);
   const { error } = await supabase.auth.signOut();
   if (error) {
     console.error("Could not sign out IdeaForge admin.", error);
     showToast("Could not sign out. Please try again.", true);
+    void renderAdmin();
     return;
   }
   activeAdmin = null;
