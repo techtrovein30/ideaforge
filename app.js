@@ -142,7 +142,7 @@ async function loadParticipantTeam(userId) {
     ? `Checked in at ${new Date(team.checked_in_at).toLocaleString()}`
     : "Not checked in";
   document.querySelector("#profile-note").textContent = team.payment_status === "awaiting_payment"
-    ? "Your team is registered. Submit your payment proof below to complete registration."
+    ? "Your team is registered, but payment proof has not been submitted. Contact the organizers if you still need to submit it."
     : team.payment_status === "pending_review"
       ? "Your registration is saved. Payment proof is waiting for admin review."
       : team.payment_status === "approved"
@@ -194,19 +194,13 @@ async function loadParticipantTeam(userId) {
   }
   paymentCard.hidden = false;
 
-  const needsInitialPayment = team.is_team_contact && team.payment_status === "awaiting_payment";
-  if (needsInitialPayment || team.can_resubmit === true) {
+  if (team.can_resubmit === true) {
     const initialPaymentForm = document.querySelector("#profile-payment-resubmit");
-    document.querySelector("#profile-payment-form-title").textContent = needsInitialPayment
-      ? "Submit your payment proof"
-      : "Upload a new payment proof";
-    document.querySelector("#profile-payment-resubmit-button").innerHTML = needsInitialPayment
-      ? "Submit payment proof <span>↗</span>"
-      : "Resubmit payment proof <span>↗</span>";
-    document.querySelector("#profile-payment-note").textContent =
-      needsInitialPayment
-        ? "Complete your registration by entering the UTR and uploading a clear payment screenshot."
-        : team.payment_note || "Please upload a clear payment proof and verify the UTR before resubmitting.";
+    document.querySelector("#profile-payment-form-title").textContent = "Upload a new payment proof";
+    document.querySelector("#profile-payment-resubmit-button").innerHTML =
+      "Resubmit payment proof <span>↗</span>";
+    document.querySelector("#profile-payment-note").textContent = team.payment_note
+      || "An organizer requested a new payment proof. Enter the UTR and upload a clear screenshot.";
     initialPaymentForm.hidden = false;
   }
   teamCard.hidden = false;
@@ -216,8 +210,10 @@ async function loadParticipantTeam(userId) {
 }
 
 document.querySelector("#profile-payment-screenshot").addEventListener("change", (event) => {
+  const input = event.currentTarget;
   const file = event.currentTarget.files?.[0];
   const preview = document.querySelector("#profile-payment-preview");
+  revokePreviewUrl(preview);
   preview.replaceChildren();
   preview.hidden = true;
   if (!file) return;
@@ -231,11 +227,20 @@ document.querySelector("#profile-payment-screenshot").addEventListener("change",
     showToast("The screenshot must be 5 MB or smaller.");
     return;
   }
+  const previewUrl = URL.createObjectURL(file);
+  preview.dataset.previewUrl = previewUrl;
   const image = document.createElement("img");
-  image.src = URL.createObjectURL(file);
+  image.src = previewUrl;
   image.alt = "Preview of the replacement payment screenshot";
-  image.addEventListener("load", () => URL.revokeObjectURL(image.src), { once: true });
   preview.append(image);
+  addScreenshotRemoveButton(preview, () => {
+    revokePreviewUrl(preview);
+    input.value = "";
+    input.hidden = false;
+    preview.replaceChildren();
+    preview.hidden = true;
+  });
+  input.hidden = true;
   preview.hidden = false;
 });
 
@@ -243,10 +248,7 @@ document.querySelector("#profile-payment-resubmit").addEventListener("submit", a
   event.preventDefault();
   const form = event.currentTarget;
   if (!supabase || !activeParticipantTeam) return;
-  const isInitialPaymentSubmission =
-    activeParticipantTeam.is_team_contact === true
-    && activeParticipantTeam.payment_status === "awaiting_payment";
-  if (!isInitialPaymentSubmission && activeParticipantTeam.can_resubmit !== true) {
+  if (activeParticipantTeam.can_resubmit !== true) {
     showToast("Payment resubmission is available only after an admin requests a re-upload.");
     return;
   }
@@ -289,7 +291,11 @@ document.querySelector("#profile-payment-resubmit").addEventListener("submit", a
       return;
     }
     form.reset();
-    document.querySelector("#profile-payment-preview").hidden = true;
+    const preview = document.querySelector("#profile-payment-preview");
+    revokePreviewUrl(preview);
+    preview.replaceChildren();
+    preview.hidden = true;
+    fileInput.hidden = false;
     await loadParticipantTeam(participantUser.id);
     showToast("New payment proof submitted for admin review.");
   } catch (error) {
@@ -297,9 +303,7 @@ document.querySelector("#profile-payment-resubmit").addEventListener("submit", a
     showToast("Could not resubmit payment proof because of a network error.");
   } finally {
     submitButton.disabled = false;
-    submitButton.innerHTML = activeParticipantTeam?.payment_status === "awaiting_payment"
-      ? "Submit payment proof <span>↗</span>"
-      : "Resubmit payment proof <span>↗</span>";
+    submitButton.innerHTML = "Resubmit payment proof <span>↗</span>";
   }
 });
 
@@ -351,6 +355,22 @@ function escapeHtml(value) {
     };
     return entities[character];
   });
+}
+
+function addScreenshotRemoveButton(preview, onRemove) {
+  const removeButton = document.createElement("button");
+  removeButton.className = "screenshot-remove";
+  removeButton.type = "button";
+  removeButton.setAttribute("aria-label", "Remove selected screenshot");
+  removeButton.textContent = "×";
+  removeButton.addEventListener("click", onRemove);
+  preview.append(removeButton);
+}
+
+function revokePreviewUrl(preview) {
+  const previewUrl = preview.dataset.previewUrl;
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  delete preview.dataset.previewUrl;
 }
 
 function showToast(message, isAdmin = false) {
@@ -689,20 +709,25 @@ document.querySelector("#back-to-team").addEventListener("click", () => {
 });
 
 document.querySelector("#payment-screenshot").addEventListener("change", (event) => {
-  const file = event.currentTarget.files?.[0];
+  const input = event.currentTarget;
+  const file = input.files?.[0];
   const preview = document.querySelector("#screenshot-preview");
   if (!file) {
     selectedScreenshot = null;
+    document.querySelector("#upload-label").hidden = false;
+    preview.replaceChildren();
     preview.hidden = true;
     return;
   }
   if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-    event.currentTarget.value = "";
+    input.value = "";
+    document.querySelector("#upload-label").hidden = false;
     showToast("Choose a PNG, JPG, or WEBP image.");
     return;
   }
   if (file.size > 5 * 1024 * 1024) {
-    event.currentTarget.value = "";
+    input.value = "";
+    document.querySelector("#upload-label").hidden = false;
     showToast("The screenshot must be 5 MB or smaller.");
     return;
   }
@@ -718,6 +743,17 @@ document.querySelector("#payment-screenshot").addEventListener("change", (event)
   image.src = previewUrl;
   image.alt = "Preview of the selected payment screenshot";
   preview.append(label, image);
+  addScreenshotRemoveButton(preview, () => {
+    if (selectedScreenshot?.previewUrl) {
+      URL.revokeObjectURL(selectedScreenshot.previewUrl);
+    }
+    selectedScreenshot = null;
+    input.value = "";
+    document.querySelector("#upload-label").hidden = false;
+    preview.replaceChildren();
+    preview.hidden = true;
+  });
+  document.querySelector("#upload-label").hidden = true;
   preview.hidden = false;
 });
 
@@ -1472,6 +1508,44 @@ async function retryAdminEmail(button) {
   await loadAdminDashboard();
   showToast("Confirmation email queued for retry.", true);
 }
+
+document.querySelector("#send-gmail-queue").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  if (!activeAdmin) {
+    showToast("Sign in with an approved admin account first.", true);
+    return;
+  }
+  if (!window.confirm("Send the next batch of due confirmation emails now?")) return;
+
+  button.disabled = true;
+  button.dataset.originalText = button.textContent;
+  button.textContent = "Sending queued emails…";
+  try {
+    const { data, error } = await supabase.functions.invoke("ideaforge-email-worker", {
+      body: {},
+    });
+    if (error) {
+      console.error("Could not run the IdeaForge Gmail queue.", error);
+      showToast(error.message || "Could not send queued confirmation emails.", true);
+      return;
+    }
+    if (data?.enabled !== true) {
+      showToast(data?.note || "Gmail sending is disabled in Supabase.", true);
+      return;
+    }
+    await loadAdminDashboard();
+    showToast(
+      `Gmail queue complete: ${data.sent} sent, ${data.failed} failed, ${data.retried} scheduled to retry.`,
+      true,
+    );
+  } catch (error) {
+    console.error("Unexpected error while sending the IdeaForge Gmail queue.", error);
+    showToast("Could not send queued confirmation emails. Please try again.", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = button.dataset.originalText || "✉ Send next batch now";
+  }
+});
 
 document.querySelector("#admin-email-list").addEventListener("click", async (event) => {
   const button = event.target.closest('button[data-action="retry-email"]');

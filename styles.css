@@ -2413,3 +2413,47 @@ body { background: var(--bg); }
   }
   .admin-payment-actions > .small-button { min-height: 42px; }
 }
+
+.screenshot-preview,
+.profile-payment-preview {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 12px;
+  padding: 10px 42px 10px 10px;
+  background: #17171b;
+  border: 1px solid #35343b;
+  border-radius: 8px;
+}
+.screenshot-preview img,
+.profile-payment-preview img {
+  max-width: min(100%, 300px);
+  max-height: 220px;
+  margin-top: 8px;
+  object-fit: contain;
+}
+.screenshot-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: #fff;
+  background: #852f3d;
+  border: 1px solid #b34356;
+  border-radius: 50%;
+  cursor: pointer;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+}
+.screenshot-remove:hover { background: #a63b4b; }
+.admin-outbox-actions .approve {
+  color: #fff;
+  background: #7441cf;
+  border-color: #8456da;
+}
+.admin-outbox-actions .approve:hover { background: #8251dc; }
+.admin-outbox-actions .approve:disabled { opacity: .65; cursor: wait; }

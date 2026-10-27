@@ -19,6 +19,7 @@ import {
 const SENDING_ENABLED = Deno.env.get("IDEAFORGE_EMAIL_SENDING_ENABLED") === "true";
 const WORKER_TOKEN = Deno.env.get("IDEAFORGE_EMAIL_WORKER_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const BATCH_SIZE = Math.max(
   1,
@@ -40,7 +41,12 @@ const GMAIL_CONFIG: GmailConfig = {
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -66,13 +72,43 @@ function safeError(error: unknown): string {
 }
 
 Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") {
+    return new Response("ok", {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+      },
+    });
+  }
+
   if (request.method !== "POST") {
     return json({ error: "method_not_allowed" }, 405);
   }
 
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!WORKER_TOKEN || !constantTimeEqual(bearer, WORKER_TOKEN)) {
-    return json({ error: "unauthorized" }, 401);
+  const isWorkerRequest = Boolean(WORKER_TOKEN) && constantTimeEqual(bearer, WORKER_TOKEN);
+  if (!isWorkerRequest) {
+    if (!bearer || !SUPABASE_ANON_KEY) {
+      return json({ error: "unauthorized" }, 401);
+    }
+
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${bearer}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: userData, error: userError } = await userClient.auth.getUser(bearer);
+    if (userError || !userData.user) {
+      return json({ error: "unauthorized" }, 401);
+    }
+    const { data: isAdmin, error: adminCheckError } = await userClient.rpc("is_ideaforge_admin");
+    if (adminCheckError) {
+      console.error("[ideaforge-email-worker] Admin authorization check failed:", adminCheckError.message);
+      return json({ error: "admin_authorization_unavailable" }, 503);
+    }
+    if (isAdmin !== true) {
+      return json({ error: "forbidden" }, 403);
+    }
   }
 
   if (!SENDING_ENABLED) {

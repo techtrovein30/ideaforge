@@ -110,9 +110,12 @@ be configured in Supabase. Required secret names are `GMAIL_CLIENT_ID`,
 `IDEAFORGE_GMAIL_FROM_NAME`, `IDEAFORGE_EMAIL_WORKER_TOKEN`, and
 `IDEAFORGE_EMAIL_SENDING_ENABLED`. The Supabase service-role key is never
 needed in the browser and must never be placed in a `VITE_*` variable.
-The worker is configured with `verify_jwt = false` because it authenticates
-with its own high-entropy bearer token; deploy it only after configuring that
-secret. The Gmail authorization must include the
+The worker is configured with `verify_jwt = false` so scheduled requests can
+authenticate with their high-entropy worker bearer token. The admin outbox's
+**Send queued now** button instead uses the signed-in user's JWT; the worker
+validates that user and checks `is_ideaforge_admin` before processing the queue.
+Deploy the updated function to enable this manual action. The Gmail
+authorization must include the
 `https://www.googleapis.com/auth/gmail.send` scope. Existing Google sign-in
 OAuth should remain unchanged.
 
@@ -126,7 +129,9 @@ first. The scheduler runs every five minutes; the database enforces a
 concurrency-safe 200-message rolling 24-hour cap.
 
 The worker records Gmail API acceptance, which is not proof of inbox delivery.
-The Gmail outbox page can show and retry eligible failures, but queued messages
-are sent only when the Edge Function and scheduler are deployed and enabled.
+The Gmail outbox page can show and retry eligible failures. An admin can use
+**Send next batch now** to process currently due messages up to the configured
+batch limit. Automatic sending also requires the Edge Function and scheduler
+to be deployed and enabled.
 For the remaining activation steps and sender/OAuth setup requirements, see
 [URLs needed](./URLs%20needed.md).
