@@ -1074,36 +1074,71 @@ async function loadAdminDashboard() {
 function renderAdminUsers(teams) {
   const list = document.querySelector("#admin-user-list");
   const search = document.querySelector("#admin-user-search");
-  const query = search.value.trim().toLowerCase();
-  const members = teams.flatMap((team) =>
-    (team.ideaforge_members ?? []).map((member) => ({
-      ...member,
-      teamName: team.team_name,
-      paymentStatus: team.payment_status,
-    })),
+  const memberCount = teams.reduce(
+    (total, team) => total + (team.ideaforge_members?.length ?? 0),
+    0,
   );
-
+  const teamLabel = `${teams.length} team${teams.length === 1 ? "" : "s"}`;
   document.querySelector("#admin-user-count").textContent =
-    `${members.length} participant${members.length === 1 ? "" : "s"}`;
-  list.innerHTML = members.map((member) => {
-    const searchText = [
-      member.full_name,
-      member.email,
-      member.college_name,
-      member.mobile_number,
-      member.teamName,
-    ].join(" ").toLowerCase();
-    return `<article class="admin-user-row" data-search="${escapeHtml(searchText)}">
-      <div><strong>${escapeHtml(member.full_name)}${member.is_team_contact ? " · Team leader" : ""}</strong><span>${escapeHtml(member.teamName)}</span></div>
-      <div><span>${escapeHtml(member.email)}</span><span>${escapeHtml(member.mobile_number)}</span></div>
-      <div><span>${escapeHtml(member.college_name)}</span><span class="status-pill ${member.paymentStatus === "approved" ? "approved" : ""}">${escapeHtml(member.paymentStatus.replaceAll("_", " "))}</span></div>
-    </article>`;
+    `${memberCount} participant${memberCount === 1 ? "" : "s"} · ${teamLabel}`;
+
+  list.innerHTML = teams.map((team) => {
+    const members = team.ideaforge_members ?? [];
+    const teamSearch = `${team.team_name} ${team.team_code} ${team.payment_status}`.toLowerCase();
+    const memberRows = members.map((member) => {
+      const searchText = [
+        member.full_name,
+        member.email,
+        member.college_name,
+        member.mobile_number,
+      ].join(" ").toLowerCase();
+      return `<article class="admin-user-row" data-search="${escapeHtml(searchText)}">
+        <div class="admin-user-identity">
+          <span class="admin-user-avatar" aria-hidden="true">${escapeHtml(String(member.full_name ?? "").trim().charAt(0).toUpperCase() || "?")}</span>
+          <div><strong>${escapeHtml(member.full_name)}</strong>${member.is_team_contact ? '<span class="admin-team-leader">TEAM LEADER</span>' : ""}</div>
+        </div>
+        <div class="admin-user-contact"><span>${escapeHtml(member.email)}</span><span>${escapeHtml(member.mobile_number)}</span></div>
+        <div class="admin-user-college">${escapeHtml(member.college_name)}</div>
+      </article>`;
+    }).join("");
+    const paymentStatus = team.payment_status ?? "unknown";
+    return `<section class="admin-user-team" data-team-search="${escapeHtml(teamSearch)}">
+      <header class="admin-user-team-heading">
+        <div class="admin-user-team-title">
+          <span class="admin-user-team-icon" aria-hidden="true">✳</span>
+          <div><h3>${escapeHtml(team.team_name)}</h3><span>${escapeHtml(team.team_code)}</span></div>
+        </div>
+        <div class="admin-user-team-meta">
+          <span class="admin-user-team-size">${members.length} member${members.length === 1 ? "" : "s"}</span>
+          <span class="status-pill ${paymentStatus === "approved" ? "approved" : paymentStatus === "rejected" ? "reupload-requested" : ""}">${escapeHtml(paymentStatus.replaceAll("_", " "))}</span>
+        </div>
+      </header>
+      <div class="admin-user-team-members">${memberRows || '<p class="admin-user-no-members">No participant details available.</p>'}</div>
+    </section>`;
   }).join("");
-  list.querySelectorAll(".admin-user-row").forEach((row) => {
-    row.hidden = query !== "" && !row.dataset.search.includes(query);
-  });
-  document.querySelector("#admin-users-empty").hidden =
-    [...list.children].some((row) => !row.hidden);
+  filterAdminUsers(search.value);
+}
+
+function filterAdminUsers(value) {
+  const query = value.trim().toLowerCase();
+  const teams = [...document.querySelectorAll("#admin-user-list .admin-user-team")];
+  let visibleTeams = 0;
+  for (const team of teams) {
+    const isTeamMatch = query !== "" && team.dataset.teamSearch.includes(query);
+    const members = [...team.querySelectorAll(".admin-user-row")];
+    let hasVisibleMember = false;
+    for (const member of members) {
+      member.hidden = query !== "" && !isTeamMatch && !member.dataset.search.includes(query);
+      if (!member.hidden) hasVisibleMember = true;
+    }
+    if (isTeamMatch) {
+      for (const member of members) member.hidden = false;
+      hasVisibleMember = true;
+    }
+    team.hidden = !hasVisibleMember;
+    if (!team.hidden) visibleTeams += 1;
+  }
+  document.querySelector("#admin-users-empty").hidden = visibleTeams > 0;
 }
 
 function renderAdminEmails(emails, teams) {
@@ -1434,12 +1469,7 @@ document.querySelector(".admin-outbox-filters").addEventListener("click", (event
 document.querySelector("#export-sent-emails").addEventListener("click", exportSentEmails);
 
 document.querySelector("#admin-user-search").addEventListener("input", (event) => {
-  const query = event.currentTarget.value.trim().toLowerCase();
-  const rows = [...document.querySelectorAll("#admin-user-list .admin-user-row")];
-  for (const row of rows) {
-    row.hidden = query !== "" && !row.dataset.search.includes(query);
-  }
-  document.querySelector("#admin-users-empty").hidden = rows.some((row) => !row.hidden);
+  filterAdminUsers(event.currentTarget.value);
 });
 
 document.querySelector("#refresh-email-outbox").addEventListener("click", async (event) => {
