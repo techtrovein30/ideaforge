@@ -19,10 +19,16 @@ npm run build
 npm run preview
 ```
 
-The admin console is available at `/wasd4381`. For Vercel deployments, keep
+The admin console is available at `/wasd4381`; the separately routed email
+queue is at `/wasd4381/email` and requires the same admin sign-in. For Vercel deployments, keep
 [`vercel.json`](./vercel.json) in the configured project root so Vercel serves
 the app for that route instead of returning a 404. Redeploy after adding or
 changing the rewrite configuration.
+
+The participant profile check-in scanner is hidden until an admin enables it
+at `/wasd4381/email/qrtoggle`. Apply
+[`20261027170000_ideaforge_participant_checkin_toggle.sql`](./supabase/migrations/20261027170000_ideaforge_participant_checkin_toggle.sql)
+to existing Supabase projects before using this toggle.
 
 Copy `.env.example` to `.env` for local, browser-safe Supabase configuration.
 The service-role key must only be configured in a trusted backend or Supabase
@@ -86,6 +92,12 @@ after the team-limit migration. It lets all registered team members view their
 team's profile and check-in status, creates short-lived admin check-in QR
 sessions, and limits participant self-check-in to an authenticated member of
 that team. Payment proof remains visible only to the team contact.
+
+Apply
+[`supabase/migrations/20261027100000_ideaforge_accept_college_email_domains.sql`](./supabase/migrations/20261027100000_ideaforge_accept_college_email_domains.sql)
+after the participant check-in migration to accept valid college and other
+email domains during registration. The team leader still signs in with Google,
+and their entered email must match that signed-in account.
 
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)

@@ -922,6 +922,7 @@ body { background: var(--bg); }
 .profile-payment-status[data-status="pending_review"] { border-color: rgba(255,192,54,.4); color: #ffca52; }
 .profile-payment-status[data-status="rejected"] { border-color: rgba(255,116,88,.4); color: #ff9a83; }
 .profile-payment-proof { margin-top: 18px; }
+.profile-payment-edit-notice { margin: 16px 0 0; padding: 12px 14px; border-left: 3px solid #d5a74a; background: rgba(213, 167, 74, .1); color: #e8d8ae; font-size: 13px; line-height: 1.55; }
 .profile-payment-proof .eyebrow { margin-bottom: 9px; }
 .profile-payment-proof img { display: block; max-width: 100%; max-height: 400px; object-fit: contain; object-position: left top; border: 1px solid rgba(255,255,255,.09); background: #080808; }
 .profile-payment-proof > p:last-child:not(.eyebrow) { color: #a8a09c; font-size: 12px; }
@@ -991,7 +992,12 @@ body { background: var(--bg); }
 .admin-sidebar-brand div span { color: #8f8884; font-family: var(--mono); font-size: 8px; letter-spacing: .14em; }
 .admin-nav-label { margin: 25px 10px 10px; color: #77706d; font-family: var(--mono); font-size: 8px; letter-spacing: .13em; }
 .admin-sidebar .admin-nav { display: grid; gap: 4px; margin: 0; border: 0; }
-.admin-sidebar .admin-nav-button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 43px; padding: 0 12px; border: 0; border-left: 2px solid transparent; color: #a29a96; text-align: left; font-size: 11px; }
+.admin-sidebar .admin-nav-button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 43px; padding: 0 12px; border: 0; border-left: 2px solid transparent; color: #a29a96; text-align: left; text-decoration: none; font-size: 11px; }
+.admin-sidebar [data-admin-nested-route] { display: none; }
+.admin-shell.admin-nested-route .admin-sidebar [data-admin-nested-route] { display: flex; }
+.admin-shell.admin-nested-route .admin-sidebar [data-admin-main-page],
+.admin-shell.admin-nested-route #admin-dashboard > .admin-nav { display: none; }
+.admin-shell.admin-checkin-toggle-only #admin-dashboard > .admin-page:not(#admin-checkin-toggle-page) { display: none !important; }
 .admin-sidebar .admin-nav-button span { width: 18px; color: #8f8884; text-align: center; font-size: 16px; }
 .admin-sidebar .admin-nav-button:hover, .admin-sidebar .admin-nav-button.active { background: rgba(237, 41, 57, .12); border-left-color: #ed2939; color: #ff7883; }
 .admin-sidebar .admin-nav-button.active span { color: #ff7883; }

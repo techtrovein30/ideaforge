@@ -12,6 +12,7 @@
 create table if not exists public.ideaforge_settings (
   id boolean primary key default true check (id),
   registration_open boolean not null default true,
+  participant_checkin_enabled boolean not null default false,
   updated_at timestamptz not null default now(),
   updated_by uuid references auth.users (id) on delete set null
 );
@@ -52,7 +53,7 @@ create table if not exists public.ideaforge_members (
     char_length(btrim(mobile_number)) between 7 and 18
     and btrim(mobile_number) ~ '^[0-9+() -]+$'
   ),
-  email text not null check (btrim(email) ~* '^[^@[:space:]]+@gmail[.]com$'),
+  email text not null check (btrim(email) ~* '^[^@[:space:]]+@[^@[:space:].]+([.][^@[:space:].]+)+$'),
   is_team_contact boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -166,16 +167,16 @@ begin
       or nullif(btrim(m.value ->> 'college_name'), '') is null
       or char_length(btrim(m.value ->> 'college_name')) > 160
       or coalesce(btrim(m.value ->> 'mobile_number'), '') !~ '^[0-9+() -]{7,18}$'
-      or coalesce(btrim(m.value ->> 'email'), '') !~* '^[^@[:space:]]+@gmail[.]com$'
+      or coalesce(btrim(m.value ->> 'email'), '') !~* '^[^@[:space:]]+@[^@[:space:].]+([.][^@[:space:].]+)+$'
   ) then
-    raise exception 'Every member needs a valid name, college, mobile number, and Gmail address';
+    raise exception 'Every member needs a valid name, college, mobile number, and email address';
   end if;
 
   if (
     select count(distinct lower(btrim(m.value ->> 'email')))
     from jsonb_array_elements(p_members) as m(value)
   ) <> v_member_count then
-    raise exception 'Each team member must use a different Gmail address';
+    raise exception 'Each team member must use a different email address';
   end if;
 
   insert into public.ideaforge_teams (team_name)

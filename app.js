@@ -1,4 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+} from "@supabase/supabase-js";
 import QRCode from "qrcode";
 
 const PAYMENT_BUCKET = "ideaforge-payment-proofs";
@@ -32,6 +37,8 @@ let activeEmailFilter = "all";
 let activeParticipantTeam = null;
 let participantTeamStatus = "checking";
 let participantCheckinScannerControls = null;
+let participantCheckinEnabled = false;
+let adminCheckinEnabled = false;
 let adminTeamsData = [];
 
 function updateRegistrationLinks() {
@@ -81,6 +88,8 @@ function updateParticipantProfile(user) {
   teamMessage.textContent = "";
   registerLink.hidden = false;
   document.querySelector("#participant-checkin-message").textContent = "";
+  document.querySelector(".profile-team-qr-card").hidden = true;
+  participantCheckinEnabled = false;
   stopParticipantCheckinScanner();
   updateRegistrationLinks();
   const teamContactEmail = document.querySelector("#member-0-email");
@@ -111,6 +120,9 @@ async function loadParticipantTeam(userId) {
   teamCard.hidden = true;
   paymentCard.hidden = true;
   reuploadForm.hidden = true;
+  document.querySelector("#profile-payment-edit-notice").hidden = true;
+  document.querySelector("#profile-payment-utr-input").value = "";
+  document.querySelector(".profile-team-qr-card").hidden = true;
   const { data, error } = await supabase.rpc("ideaforge_get_my_team");
   if (participantUser?.id !== userId) return;
   if (error) {
@@ -131,6 +143,22 @@ async function loadParticipantTeam(userId) {
     refreshRegistrationState();
     return;
   }
+
+  const { data: checkinSetting, error: checkinSettingError } = await supabase
+    .from("ideaforge_settings")
+    .select("participant_checkin_enabled")
+    .eq("id", true)
+    .single();
+  if (participantUser?.id !== userId) return;
+  if (checkinSettingError) {
+    console.error("Could not read the participant check-in setting.", checkinSettingError);
+    participantCheckinEnabled = false;
+    document.querySelector("#participant-checkin-message").textContent =
+      "Check-in scanning is currently unavailable. Please contact an organizer.";
+  } else {
+    participantCheckinEnabled = checkinSetting?.participant_checkin_enabled === true;
+  }
+  document.querySelector(".profile-team-qr-card").hidden = !participantCheckinEnabled;
 
   participantTeamStatus = "registered";
   updateRegistrationLinks();
@@ -193,14 +221,25 @@ async function loadParticipantTeam(userId) {
     }
   }
   paymentCard.hidden = false;
+  document.querySelector("#profile-payment-edit-notice").hidden = !(
+    team.is_team_contact === true &&
+    Boolean(team.screenshot_path) &&
+    team.can_resubmit !== true
+  );
 
-  if (team.can_resubmit === true) {
+  if (
+    team.is_team_contact === true &&
+    team.payment_status === "rejected" &&
+    team.can_resubmit === true
+  ) {
     const initialPaymentForm = document.querySelector("#profile-payment-resubmit");
     document.querySelector("#profile-payment-form-title").textContent = "Upload a new payment proof";
     document.querySelector("#profile-payment-resubmit-button").innerHTML =
       "Resubmit payment proof <span>↗</span>";
     document.querySelector("#profile-payment-note").textContent = team.payment_note
       || "An organizer requested a new payment proof. Enter the UTR and upload a clear screenshot.";
+    document.querySelector("#profile-payment-utr-input").value = team.payment_utr ?? "";
+    document.querySelector("#profile-payment-edit-notice").hidden = true;
     initialPaymentForm.hidden = false;
   }
   teamCard.hidden = false;
@@ -396,7 +435,7 @@ function renderMembers() {
         <div><label class="field-label" for="member-${index}-name">Full name <span>*</span></label><input class="text-input" id="member-${index}-name" name="memberName" autocomplete="name" maxlength="100" required /></div>
         <div><label class="field-label" for="member-${index}-college">College name <span>*</span></label><input class="text-input" id="member-${index}-college" name="memberCollege" maxlength="160" required /></div>
         <div><label class="field-label" for="member-${index}-mobile">Mobile number <span>*</span></label><input class="text-input" id="member-${index}-mobile" name="memberMobile" type="tel" inputmode="tel" autocomplete="tel" minlength="7" maxlength="18" title="Enter a valid mobile number" required /></div>
-        <div><label class="field-label" for="member-${index}-email">Gmail address <span>*</span></label><input class="text-input" id="member-${index}-email" name="memberEmail" type="email" autocomplete="email" maxlength="254" pattern="[^@\\s]+@gmail\\.com" title="Please enter a Gmail address ending in @gmail.com" required /></div>
+        <div><label class="field-label" for="member-${index}-email">Email address <span>*</span></label><input class="text-input" id="member-${index}-email" name="memberEmail" type="email" autocomplete="email" maxlength="254" required /></div>
       </div>`;
     membersList.append(card);
   }
@@ -529,8 +568,6 @@ function validateTeamFormFields() {
 
   const emailInputs = [...teamForm.querySelectorAll('input[name="memberEmail"]')];
   const normalizedEmails = emailInputs.map((input) => input.value.trim().toLowerCase());
-  const validGmail = /^[^@\s]+@gmail\.com$/i;
-
   for (let index = 0; index < memberCount; index += 1) {
     const nameInput = document.querySelector(`#member-${index}-name`);
     const collegeInput = document.querySelector(`#member-${index}-college`);
@@ -559,14 +596,12 @@ function validateTeamFormFields() {
 
     const isDuplicate = email !== "" && normalizedEmails.indexOf(email) !== index;
     emailInput.setCustomValidity(
-      !validGmail.test(email)
-        ? "Enter a valid Gmail address ending in @gmail.com."
-        : isDuplicate
-          ? "Each team member must use a different Gmail address."
-          : index === 0 && participantUser?.email
-              && email !== participantUser.email.trim().toLowerCase()
-            ? "The first member's Gmail must match the signed-in account."
-            : "",
+      isDuplicate
+        ? "Each team member must use a different email address."
+        : index === 0 && participantUser?.email
+            && email !== participantUser.email.trim().toLowerCase()
+          ? "The team leader's email must match the signed-in account."
+          : "",
     );
   }
 
@@ -893,6 +928,7 @@ function setAdminPage(pageName) {
     reuploads: ["Re-uploads", "Review payment proofs that need a new upload."],
     "deleted-history": ["Deleted history", "Review historical registration removals."],
     "email-queue": ["Email queue", "Review queued confirmations and retry eligible failures."],
+    "qr-toggle": ["QR scanner toggle", "Control whether participants can access profile check-in scanning."],
     events: ["Events", "Event registration and operations overview."],
   };
   const pageSections = {
@@ -907,6 +943,7 @@ function setAdminPage(pageName) {
     checkin: "checkin",
     emails: "emails",
     "email-queue": "emails",
+    "qr-toggle": "checkin-toggle",
     "deleted-history": "deleted-history",
   };
   const sectionName = pageSections[pageName] ?? "overview";
@@ -914,7 +951,10 @@ function setAdminPage(pageName) {
     page.hidden = page.id !== `admin-${sectionName}-page`;
   }
   for (const button of document.querySelectorAll(".admin-nav-button")) {
-    button.classList.toggle("active", button.dataset.adminPage === pageName);
+    button.classList.toggle(
+      "active",
+      (button.dataset.adminPage ?? button.dataset.adminRoute) === pageName,
+    );
   }
   const [title, description] = pageDetails[pageName] ?? pageDetails.overview;
   document.querySelector("#admin-current-page").textContent = title;
@@ -936,6 +976,11 @@ async function renderAdmin() {
   const signOutButton = document.querySelector("#admin-sign-out");
 
   activeAdmin = null;
+  const emailQueueRoute = isEmailQueueRoute();
+  const checkinToggleRoute = isCheckinToggleRoute();
+  adminView.classList.toggle("admin-email-only", emailQueueRoute);
+  adminView.classList.toggle("admin-nested-route", emailQueueRoute || checkinToggleRoute);
+  adminView.classList.toggle("admin-checkin-toggle-only", checkinToggleRoute);
   setAdminAuthenticated(false);
   loginPanel.hidden = true;
   dashboard.hidden = true;
@@ -993,10 +1038,39 @@ async function renderAdmin() {
   document.querySelector("#admin-account-avatar").textContent =
     nameParts.slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "AD";
   setAdminAuthenticated(true);
+  document.querySelector("#toggle-registration").hidden = emailQueueRoute || checkinToggleRoute;
   signOutButton.hidden = false;
   dashboard.hidden = false;
-  setAdminPage("overview");
+  setAdminPage(checkinToggleRoute ? "qr-toggle" : emailQueueRoute ? "email-queue" : "overview");
   await loadAdminDashboard();
+  if (activeAdmin && checkinToggleRoute) await loadAdminCheckinToggle();
+}
+
+async function loadAdminCheckinToggle() {
+  const button = document.querySelector("#toggle-participant-checkin");
+  const status = document.querySelector("#participant-checkin-toggle-status");
+  button.disabled = true;
+  status.textContent = "Loading the current scanner setting…";
+  const { data, error } = await supabase
+    .from("ideaforge_settings")
+    .select("participant_checkin_enabled")
+    .eq("id", true)
+    .single();
+  if (error) {
+    console.error("Could not load the participant check-in setting.", error);
+    status.textContent = "Could not load this setting. Apply the participant check-in toggle migration, then reload.";
+    button.textContent = "Setting unavailable";
+    return;
+  }
+  adminCheckinEnabled = data.participant_checkin_enabled === true;
+  button.disabled = false;
+  button.setAttribute("aria-pressed", String(adminCheckinEnabled));
+  button.textContent = adminCheckinEnabled
+    ? "Disable participant QR scanner"
+    : "Enable participant QR scanner";
+  status.textContent = adminCheckinEnabled
+    ? "Participant check-in scanning is enabled."
+    : "Participant check-in scanning is hidden from profiles.";
 }
 
 async function loadAdminDashboard() {
@@ -1525,8 +1599,27 @@ document.querySelector("#send-gmail-queue").addEventListener("click", async (eve
       body: {},
     });
     if (error) {
-      console.error("Could not run the IdeaForge Gmail queue.", error);
-      showToast(error.message || "Could not send queued confirmation emails.", true);
+      console.error("Could not run the IdeaForge Gmail queue.", error.toJSON?.() ?? error);
+      if (error instanceof FunctionsFetchError) {
+        showToast(
+          "The Gmail function could not be reached. Deploy the latest ideaforge-email-worker to Supabase and verify its CORS preflight is enabled.",
+          true,
+        );
+      } else if (error instanceof FunctionsHttpError) {
+        let detail = "The Gmail function returned an error.";
+        try {
+          const response = error.context;
+          const body = await response.clone().json();
+          detail = body.error || body.note || detail;
+        } catch (parseError) {
+          console.error("Could not read the Gmail function error response.", parseError);
+        }
+        showToast(`Gmail function error: ${detail}`, true);
+      } else if (error instanceof FunctionsRelayError) {
+        showToast("Supabase could not route the request to the Gmail function. Check its deployment and status.", true);
+      } else {
+        showToast(error.message || "Could not send queued confirmation emails.", true);
+      }
       return;
     }
     if (data?.enabled !== true) {
@@ -1571,6 +1664,47 @@ document.querySelector("#admin-menu-toggle").addEventListener("click", (event) =
 document.querySelector("#admin-payment-search").addEventListener("input", filterAdminPayments);
 document.querySelector("#admin-payment-filter").addEventListener("change", filterAdminPayments);
 document.querySelector("#admin-email-search").addEventListener("input", filterAdminEmails);
+document.querySelector("#toggle-participant-checkin").addEventListener("click", async (event) => {
+  if (!activeAdmin || !supabase) {
+    showToast("Sign in with an approved admin account first.", true);
+    return;
+  }
+  const button = event.currentTarget;
+  const status = document.querySelector("#participant-checkin-toggle-status");
+  const nextValue = !adminCheckinEnabled;
+  button.disabled = true;
+  status.textContent = nextValue
+    ? "Enabling participant check-in scanning…"
+    : "Disabling participant check-in scanning…";
+  const { data, error } = await supabase
+    .from("ideaforge_settings")
+    .update({
+      participant_checkin_enabled: nextValue,
+      updated_at: new Date().toISOString(),
+      updated_by: activeAdmin.id,
+    })
+    .eq("id", true)
+    .select("participant_checkin_enabled")
+    .single();
+  if (error || data?.participant_checkin_enabled !== nextValue) {
+    console.error(
+      "Could not update the participant check-in setting.",
+      error ?? new Error("The updated setting was not returned."),
+    );
+    status.textContent = "Could not update the setting. Check admin permissions and try again.";
+    button.disabled = false;
+    return;
+  }
+  adminCheckinEnabled = nextValue;
+  button.setAttribute("aria-pressed", String(adminCheckinEnabled));
+  button.textContent = adminCheckinEnabled
+    ? "Disable participant QR scanner"
+    : "Enable participant QR scanner";
+  button.disabled = false;
+  status.textContent = adminCheckinEnabled
+    ? "Participant check-in scanning is enabled."
+    : "Participant check-in scanning is hidden from profiles.";
+});
 document.querySelector(".admin-outbox-filters").addEventListener("click", (event) => {
   const button = event.target.closest("button[data-email-filter]");
   if (!button) return;
@@ -1807,8 +1941,17 @@ document.querySelector("#create-checkin-qr").addEventListener("click", async (ev
   }
 });
 
+function isEmailQueueRoute() {
+  return window.location.pathname.replace(/\/+$/, "").endsWith("/wasd4381/email");
+}
+
+function isCheckinToggleRoute() {
+  return window.location.pathname.replace(/\/+$/, "").endsWith("/wasd4381/email/qrtoggle");
+}
+
 function isAdminRoute() {
-  return window.location.pathname.replace(/\/+$/, "").endsWith("/wasd4381") ||
+  const path = window.location.pathname.replace(/\/+$/, "");
+  return path.endsWith("/wasd4381") || isEmailQueueRoute() || isCheckinToggleRoute() ||
     window.location.search === "?admin=wasd4381" ||
     window.location.hash === "#admin";
 }
@@ -1817,6 +1960,9 @@ function renderRoute() {
   const admin = isAdminRoute();
   publicView.hidden = admin;
   adminView.hidden = !admin;
+  adminView.classList.toggle("admin-email-only", isEmailQueueRoute());
+  adminView.classList.toggle("admin-nested-route", isEmailQueueRoute() || isCheckinToggleRoute());
+  adminView.classList.toggle("admin-checkin-toggle-only", isCheckinToggleRoute());
   if (admin) {
     void renderAdmin();
     return;

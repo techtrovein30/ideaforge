@@ -2,6 +2,22 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/wasd4381/email/qrtoggle",
+      "destination": "/"
+    },
+    {
+      "source": "/wasd4381/email/qrtoggle/",
+      "destination": "/"
+    },
+    {
+      "source": "/wasd4381/email",
+      "destination": "/"
+    },
+    {
+      "source": "/wasd4381/email/",
+      "destination": "/"
+    },
+    {
       "source": "/wasd4381",
       "destination": "/"
     }
