@@ -2252,3 +2252,164 @@ body { background: var(--bg); }
   .admin-user-college { font-size: 13px; }
   .admin-user-team-title h3 { font-size: 17px; }
 }
+
+/* Keep verification actions directly visible in their own table column. */
+.admin-payment-columns,
+.admin-payment-row {
+  grid-template-columns:
+    minmax(120px, 1.15fr)
+    minmax(125px, 1.1fr)
+    minmax(115px, 1fr)
+    minmax(95px, .75fr)
+    minmax(130px, 1fr)
+    minmax(135px, .95fr);
+}
+.admin-payment-actions {
+  grid-column: auto;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding-top: 0;
+}
+.admin-payment-actions > .small-button {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  white-space: normal;
+}
+.admin-payment-actions > .approve {
+  color: #51d3a1;
+  background: #101d17;
+  border-color: #1c563a;
+}
+.admin-payment-actions > .approve:hover {
+  color: #7ce5bb;
+  background: #173324;
+}
+.admin-payment-actions > .request-reupload {
+  color: #edbe58;
+  background: #211a0d;
+  border-color: #5b4517;
+}
+.admin-payment-actions > .request-reupload:hover {
+  color: #f7d27b;
+  background: #30240f;
+}
+.admin-payment-details { grid-column: 1 / -1; }
+
+.admin-sidebar {
+  overflow-y: auto;
+  scrollbar-color: #403452 #101013;
+  scrollbar-width: thin;
+}
+.admin-sidebar .admin-nav { gap: 5px; }
+.admin-sidebar .admin-nav-button {
+  min-height: 40px;
+  font-size: 13px;
+}
+.admin-sidebar-status {
+  flex: 0 0 auto;
+  margin-top: auto;
+  margin-bottom: 12px;
+}
+.admin-sidebar-status .pulse-dot { color: #20c997; }
+.admin-sidebar-status strong {
+  color: #20c997;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.admin-sidebar-status div span { color: #b2adb9; font-size: 11px; }
+.admin-sidebar-status div small {
+  color: #77727f;
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+.admin-sidebar-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 8px;
+  border-top: 1px solid #29282f;
+}
+.admin-account-avatar {
+  display: grid;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #c39aff;
+  background: #2a1c3c;
+  border: 1px solid #44305d;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.admin-sidebar-account > div { display: grid; min-width: 0; gap: 3px; }
+.admin-sidebar-account strong {
+  overflow: hidden;
+  color: #eeeaf3;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-sidebar-account > div > span {
+  color: #a77af5;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+}
+.admin-sidebar-signout {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 0 9px;
+  color: #aaa5b0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.admin-sidebar-signout:hover { color: #e8e4ed; }
+.admin-sidebar-signout > span { font-size: 16px; }
+.admin-history-notice {
+  padding: 22px;
+  color: #e7e3ed;
+  background: #151518;
+  border: 1px solid #302d37;
+  border-left: 4px solid #7441cf;
+  border-radius: 9px;
+}
+.admin-history-notice strong { font-size: 16px; }
+.admin-history-notice p {
+  margin: 8px 0 0;
+  color: #aaa5b0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) and (min-width: 601px) {
+  .admin-payment-columns,
+  .admin-payment-row {
+    grid-template-columns:
+      minmax(120px, 1.15fr)
+      minmax(130px, 1.2fr)
+      minmax(120px, 1fr)
+      minmax(105px, .85fr)
+      minmax(130px, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-payment-columns { display: none; }
+  .admin-payment-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .admin-payment-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-payment-actions > .small-button { min-height: 42px; }
+}

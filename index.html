@@ -334,13 +334,19 @@
         <p class="admin-nav-label">EVENT MANAGEMENT</p>
         <nav class="admin-nav" aria-label="Admin pages">
           <button class="admin-nav-button active" type="button" data-admin-page="overview"><span aria-hidden="true">▦</span> Dashboard</button>
-          <button class="admin-nav-button" type="button" data-admin-page="payments"><span aria-hidden="true">▤</span> Payments</button>
-          <button class="admin-nav-button" type="button" data-admin-page="users"><span aria-hidden="true">♙</span> Users</button>
           <button class="admin-nav-button" type="button" data-admin-page="checkin"><span aria-hidden="true">✓</span> Check-in</button>
-          <button class="admin-nav-button" type="button" data-admin-page="emails"><span aria-hidden="true">✉</span> Gmail outbox</button>
+          <button class="admin-nav-button" type="button" data-admin-page="students"><span aria-hidden="true">♙</span> Students</button>
+          <button class="admin-nav-button" type="button" data-admin-page="registrations"><span aria-hidden="true">▤</span> Registrations</button>
+          <button class="admin-nav-button" type="button" data-admin-page="teams"><span aria-hidden="true">♧</span> Teams</button>
+          <button class="admin-nav-button" type="button" data-admin-page="payments"><span aria-hidden="true">▣</span> Payments</button>
+          <button class="admin-nav-button" type="button" data-admin-page="reuploads"><span aria-hidden="true">↻</span> Re-uploads</button>
+          <button class="admin-nav-button" type="button" data-admin-page="deleted-history"><span aria-hidden="true">◷</span> Deleted History</button>
+          <button class="admin-nav-button" type="button" data-admin-page="email-queue"><span aria-hidden="true">✉</span> Email Queue</button>
+          <button class="admin-nav-button" type="button" data-admin-page="events"><span aria-hidden="true">▦</span> Events</button>
         </nav>
-        <div class="admin-sidebar-status"><span class="pulse-dot"></span><div><strong>ADMIN CONSOLE</strong><span>Supabase live data</span></div></div>
-        <a class="admin-sidebar-public" href="./">← Return to public site</a>
+        <div class="admin-sidebar-status"><span class="pulse-dot"></span><div><strong>SYSTEM ACTIVE</strong><span>Event Command Center</span><small>IDEAFORGE ADMIN</small></div></div>
+        <div class="admin-sidebar-account"><span class="admin-account-avatar" id="admin-account-avatar">AD</span><div><strong id="admin-account-name">Administrator</strong><span>ADMINISTRATOR</span></div></div>
+        <button class="admin-sidebar-signout" id="admin-sidebar-sign-out" type="button"><span aria-hidden="true">⇥</span> Sign out</button>
       </aside>
       <section class="admin-content">
         <section id="admin-login-panel" class="admin-login-panel" hidden>
@@ -393,7 +399,7 @@
             </div>
             <div class="admin-payment-table">
               <div class="admin-payment-columns">
-                <span>CODE / TEAM</span><span>TEAM LEADER</span><span>UTR / PROOF</span><span>STATUS</span><span>SUBMITTED</span>
+                <span>CODE / TEAM</span><span>TEAM LEADER</span><span>UTR / PROOF</span><span>STATUS</span><span>SUBMITTED</span><span>ACTION</span>
               </div>
               <div id="admin-team-list" class="admin-team-list"></div>
             </div>
@@ -449,6 +455,13 @@
               <div id="admin-email-list" class="admin-email-list"></div>
             </div>
             <div class="empty-state" id="admin-email-empty" hidden><span>✳</span><strong>No emails match this view</strong><p>Try a different status or search.</p></div>
+          </section>
+          <section class="admin-page admin-registrations" id="admin-deleted-history-page" hidden>
+            <div class="admin-table-heading"><div><p class="eyebrow">REGISTRATION HISTORY</p><h2>Deleted history</h2></div></div>
+            <div class="admin-history-notice">
+              <strong>Deleted history is not available</strong>
+              <p>Registrations are not currently archived when deleted, so there are no historical deletion records to display.</p>
+            </div>
           </section>
         </div>
       </section>

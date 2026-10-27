@@ -851,9 +851,31 @@ function setAdminPage(pageName) {
     users: ["Registered users", "Find participants and see their team and payment status."],
     checkin: ["Team check-in", "Display a temporary check-in QR or search for a team manually."],
     emails: ["Gmail outbox", "Review queued confirmations and retry eligible failures."],
+    registrations: ["Registrations", "Review team registrations and payment status."],
+    students: ["Students", "Find participants and see their team and payment status."],
+    teams: ["Teams", "Browse registered teams and their members."],
+    reuploads: ["Re-uploads", "Review payment proofs that need a new upload."],
+    "deleted-history": ["Deleted history", "Review historical registration removals."],
+    "email-queue": ["Email queue", "Review queued confirmations and retry eligible failures."],
+    events: ["Events", "Event registration and operations overview."],
   };
+  const pageSections = {
+    overview: "overview",
+    events: "overview",
+    payments: "payments",
+    registrations: "payments",
+    reuploads: "payments",
+    users: "users",
+    students: "users",
+    teams: "users",
+    checkin: "checkin",
+    emails: "emails",
+    "email-queue": "emails",
+    "deleted-history": "deleted-history",
+  };
+  const sectionName = pageSections[pageName] ?? "overview";
   for (const page of document.querySelectorAll(".admin-page")) {
-    page.hidden = page.id !== `admin-${pageName}-page`;
+    page.hidden = page.id !== `admin-${sectionName}-page`;
   }
   for (const button of document.querySelectorAll(".admin-nav-button")) {
     button.classList.toggle("active", button.dataset.adminPage === pageName);
@@ -862,6 +884,11 @@ function setAdminPage(pageName) {
   document.querySelector("#admin-current-page").textContent = title;
   document.querySelector("#admin-page-title").textContent = title;
   document.querySelector("#admin-page-description").textContent = description;
+  const paymentFilter = document.querySelector("#admin-payment-filter");
+  if (sectionName === "payments") {
+    paymentFilter.value = pageName === "reuploads" ? "rejected" : "all";
+    filterAdminPayments();
+  }
   document.querySelector("#admin-sidebar").classList.remove("open");
   document.querySelector("#admin-menu-toggle").setAttribute("aria-expanded", "false");
 }
@@ -921,6 +948,14 @@ async function renderAdmin() {
   }
 
   activeAdmin = userData.user;
+  const adminName = userData.user.user_metadata?.full_name
+    ?? userData.user.user_metadata?.name
+    ?? userData.user.email
+    ?? "Administrator";
+  const nameParts = adminName.trim().split(/\s+/);
+  document.querySelector("#admin-account-name").textContent = adminName;
+  document.querySelector("#admin-account-avatar").textContent =
+    nameParts.slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "AD";
   setAdminAuthenticated(true);
   signOutButton.hidden = false;
   dashboard.hidden = false;
@@ -1268,6 +1303,10 @@ document.querySelector("#admin-sign-out").addEventListener("click", async () => 
   }
   activeAdmin = null;
   showAdminLogin("You have signed out.");
+});
+
+document.querySelector("#admin-sidebar-sign-out").addEventListener("click", () => {
+  document.querySelector("#admin-sign-out").click();
 });
 
 document.querySelector("#toggle-registration").addEventListener("click", async (event) => {
