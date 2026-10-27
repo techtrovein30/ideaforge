@@ -1173,3 +1173,258 @@ body { background: var(--bg); }
   .admin-payment-details { grid-column: 1 / -1; }
   .admin-payment-detail-body { grid-template-columns: 1fr; }
 }
+
+/* Admin console: bold type and solid surfaces for comfortable reading. */
+.admin-shell {
+  color: #f4f2ef;
+  background: #101113;
+}
+.admin-topbar {
+  background: #17181b;
+  border-color: #303136;
+}
+.admin-sidebar {
+  background: #17181b;
+  border-color: #303136;
+}
+.admin-sidebar-mark {
+  background: #342022;
+  color: #f28a78;
+}
+.admin-sidebar-brand strong { font-size: 15px; }
+.admin-sidebar-brand div span,
+.admin-nav-label,
+.admin-sidebar-status strong { font-size: 10px; }
+.admin-sidebar .admin-nav-button {
+  min-height: 48px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.admin-sidebar .admin-nav-button:hover,
+.admin-sidebar .admin-nav-button.active {
+  background: #292022;
+  border-left-color: #d65b50;
+  color: #f1b1a6;
+}
+.admin-sidebar .admin-nav-button span,
+.admin-sidebar .admin-nav-button.active span { color: inherit; }
+.admin-sidebar-status {
+  background: #202125;
+  border-color: #38393e;
+}
+.admin-sidebar-status div span,
+.admin-sidebar-public,
+.admin-topbar-context > strong { font-size: 12px; }
+.admin-topbar-context .admin-label { color: #bbb7b2; }
+.admin-content { color: #f4f2ef; }
+.admin-heading h1 {
+  color: #faf8f5;
+  font-size: clamp(38px, 4vw, 52px);
+  font-weight: 850;
+  letter-spacing: -.045em;
+}
+.admin-heading h1 span { color: #dc7569; }
+.admin-heading .eyebrow,
+.admin-table-heading .eyebrow { color: #c8c0bb; font-size: 11px; }
+.admin-page-description,
+.admin-helper-copy {
+  color: #c3bfbb;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.admin-topbar-actions .text-link,
+.admin-topbar-actions .small-button { font-size: 14px; }
+.stat-card {
+  background: #1b1c20;
+  border: 1px solid #34353a;
+  border-radius: 12px;
+  box-shadow: none;
+}
+.stat-card > span {
+  color: #c4beba;
+  font-size: 11px;
+  font-weight: 700;
+}
+.stat-card strong { color: #f7f4f1; font-size: 44px; }
+.stat-card small { color: #c1bdb9; font-size: 13px; }
+.stat-card-pending strong,
+.stat-card-checked strong,
+.stat-card-approved strong { color: #f0c4a0; }
+.admin-table-heading h2 {
+  color: #f7f4f1;
+  font-size: 26px;
+  font-weight: 800;
+}
+.admin-table-heading .prototype-note,
+.admin-payment-count,
+.admin-user-count { color: #c4bfbb; font-size: 13px; }
+.admin-shortcuts button {
+  background: #1b1c20;
+  border-color: #36373c;
+  border-radius: 10px;
+  box-shadow: none;
+}
+.admin-shortcuts button:hover {
+  background: #242124;
+  border-color: #8c4c46;
+}
+.admin-shortcuts button > span,
+.admin-shortcuts b { color: #df8375; }
+.admin-shortcuts strong { color: #f4f1ee; font-size: 16px; }
+.admin-shortcuts small { color: #c2bdb9; font-size: 13px; }
+.admin-search-wrap > span { color: #bdb8b4; }
+.admin-search,
+.admin-filter,
+.checkin-form .text-input {
+  color: #f4f2ef;
+  background: #1b1c20;
+  border-color: #424348;
+  font-size: 15px;
+}
+.admin-search::placeholder,
+.checkin-form .text-input::placeholder { color: #aaa5a1; }
+.admin-filter option { color: #f4f2ef; background: #1b1c20; }
+.admin-payment-table,
+.admin-user-table,
+.admin-email-table {
+  background: #17181b;
+  border-color: #34353a;
+  box-shadow: none;
+}
+.admin-payment-columns,
+.admin-table-columns {
+  color: #c7c1bd;
+  background: #202125;
+  border-color: #38393e;
+  font-size: 10px;
+  font-weight: 700;
+}
+.admin-payment-row { color: #e8e4e0; }
+.payment-team-cell strong,
+.payment-contact-cell strong { color: #f6f3f0; font-size: 15px; font-weight: 750; }
+.payment-team-cell > span { color: #e89a8d; font-size: 12px; }
+.payment-contact-cell > span,
+.payment-date-cell { color: #c7c1bd; font-size: 13px; }
+.payment-proof-cell .utr-value {
+  color: #f4f0ed;
+  background: #28292d;
+  font-size: 13px;
+}
+.payment-proof-link { color: #efa297; font-size: 14px; font-weight: 700; }
+.payment-proof-link:hover { color: #ffd0c7; }
+.status-pill {
+  color: #e7c7a6;
+  background: #29251f;
+  border-color: #62503c;
+  font-size: 11px;
+  font-weight: 750;
+}
+.status-pill.approved {
+  color: #d6e0cb;
+  background: #242a22;
+  border-color: #58664f;
+}
+.status-pill.reupload-requested {
+  color: #f0c98e;
+  background: #2b261e;
+  border-color: #695532;
+}
+.admin-payment-actions > .small-button,
+.admin-email-row .small-button,
+.admin-outbox-actions .small-button,
+.checkin-search-result .small-button {
+  min-height: 42px;
+  padding: 8px 15px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.admin-payment-actions > .approve {
+  color: #e2e8d8;
+  background: #303a2c;
+  border-color: #58664f;
+}
+.admin-payment-actions > .request-reupload {
+  color: #f0d7b3;
+  background: #3a3023;
+  border-color: #715c3c;
+}
+.payment-action-complete { color: #d6e0cb !important; font-size: 14px; font-weight: 700; }
+.admin-payment-details { border-color: #38393e; }
+.admin-payment-details summary { color: #efa297; font-size: 14px; font-weight: 700; }
+.admin-payment-detail-body h4 { color: #c9c3bf; font-size: 11px; }
+.admin-member-row {
+  background: #202125;
+  border-color: #38393e;
+  font-size: 13px;
+}
+.admin-member-row strong { color: #f3efec; font-size: 14px; }
+.admin-member-row span { color: #c5bfbb; font-size: 13px; }
+.admin-user-row,
+.admin-email-row {
+  color: #e9e5e1;
+  border-color: #35363a;
+  font-size: 14px;
+}
+.admin-user-row strong,
+.admin-email-row strong { color: #f6f3f0; font-size: 15px; font-weight: 750; }
+.admin-user-row span,
+.admin-email-row span { color: #c7c1bd; font-size: 13px; }
+.admin-user-row .status-pill,
+.admin-email-row .status-pill { font-size: 11px; }
+.admin-user-list,
+.admin-email-list { background: #17181b; }
+.admin-outbox-filters .admin-filter-tab {
+  color: #d0cbc7;
+  background: #1b1c20;
+  border-color: #424348;
+  font-size: 12px;
+}
+.admin-outbox-filters .admin-filter-tab.active {
+  color: #f5d0c8;
+  background: #332322;
+  border-color: #81534d;
+}
+.admin-outbox-filters .admin-filter-tab span { color: inherit; }
+.admin-helper-copy,
+.checkin-scanner .prototype-note,
+.checkin-result,
+.checkin-search-result span { color: #c6c1bd; }
+.checkin-scanner,
+.checkin-form,
+.checkin-search-result {
+  background: #1b1c20;
+  border-color: #38393e;
+  box-shadow: none;
+}
+.checkin-scanner .eyebrow { color: #e5dfdb; font-size: 12px; font-weight: 750; }
+.checkin-search-result strong { color: #f6f3f0; font-size: 15px; }
+.admin-menu-toggle {
+  color: #f4f2ef;
+  background: #222327;
+  border-color: #424348;
+}
+.admin-footer { color: #c3bfbb; }
+
+@media (max-width: 650px) {
+  .admin-heading h1 { font-size: 36px; }
+  .admin-page-description,
+  .admin-helper-copy { font-size: 14px; }
+  .stat-card { min-height: 112px; padding: 15px; }
+  .stat-card > span { font-size: 10px; }
+  .stat-card strong { font-size: 34px; }
+  .stat-card small { font-size: 12px; }
+  .admin-shortcuts strong { font-size: 15px; }
+  .admin-shortcuts small { font-size: 13px; }
+  .admin-table-heading h2 { font-size: 23px; }
+  .admin-payment-row { gap: 12px; }
+  .payment-team-cell strong,
+  .payment-contact-cell strong { font-size: 14px; }
+  .payment-contact-cell > span,
+  .payment-date-cell { font-size: 12px; }
+  .admin-user-row strong,
+  .admin-email-row strong { font-size: 14px; }
+  .admin-user-row span,
+  .admin-email-row span { font-size: 13px; }
+  .admin-outbox-filters .admin-filter-tab { min-height: 38px; font-size: 11px; }
+}
