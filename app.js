@@ -174,6 +174,10 @@ async function loadParticipantTeam(userId) {
     };
     document.querySelector("#payment-team-summary").textContent =
       `${draftTeam.teamName} · ${draftTeam.members.length} members · Team contact: ${draftTeam.members[0]?.name ?? "Team leader"}`;
+    const paymentAmountEl = document.querySelector("#payment-amount");
+    if (paymentAmountEl) {
+      paymentAmountEl.textContent = `₹${draftTeam.members.length * 99}`;
+    }
   } else {
     draftTeam = null;
   }
@@ -792,6 +796,10 @@ teamForm.addEventListener("submit", async (event) => {
 
   document.querySelector("#payment-team-summary").textContent =
     `${draftTeam.teamName} · ${members.length} members · Team contact: ${members[0].name}`;
+  const paymentAmountEl = document.querySelector("#payment-amount");
+  if (paymentAmountEl) {
+    paymentAmountEl.textContent = `₹${members.length * 99}`;
+  }
   teamForm.hidden = true;
   paymentForm.hidden = false;
   paymentForm.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1090,7 +1098,6 @@ async function renderAdmin() {
   activeAdmin = userData.user;
   const adminName = userData.user.user_metadata?.full_name
     ?? userData.user.user_metadata?.name
-    ?? userData.user.email
     ?? "Administrator";
   const nameParts = adminName.trim().split(/\s+/);
   document.querySelector("#admin-account-name").textContent = adminName;
@@ -1135,7 +1142,7 @@ async function loadAdminCheckinToggle() {
 async function loadAdminDashboard() {
   if (!activeAdmin) return;
 
-  const [settingsResult, teamsResult, emailResult] = await Promise.all([
+  const [settingsResult, teamsResult] = await Promise.all([
     supabase
       .from("ideaforge_settings")
       .select("registration_open")
@@ -1143,11 +1150,7 @@ async function loadAdminDashboard() {
       .single(),
     supabase
       .from("ideaforge_teams")
-      .select("id, team_name, team_code, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, email, is_team_contact)")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("ideaforge_email_outbox")
-      .select("id, team_id, status, attempt_count, retryable, last_error, sent_at, recipient_email, recipient_name, created_at")
+      .select("id, team_name, team_code, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, is_team_contact)")
       .order("created_at", { ascending: false }),
   ]);
 
@@ -1161,32 +1164,37 @@ async function loadAdminDashboard() {
     showAdminConnectionError("Could not load registrations. Apply the IdeaForge admin/check-in migration and verify admin permissions.");
     return;
   }
-  if (emailResult.error) {
-    console.error("Could not load IdeaForge confirmation-email status.", emailResult.error);
-    showAdminConnectionError("Could not load email status. Apply the IdeaForge email migration and check admin permissions.");
-    return;
-  }
-
   const teams = teamsResult.data ?? [];
-  adminTeamsData = teams;
-  renderAdminCheckinSearch();
-  const emailByTeam = new Map(
-    (emailResult.data ?? []).map((row) => [row.team_id, row]),
+  const registeredTeams = teams.filter(
+    (team) => team.payment_status !== "awaiting_payment" && Boolean(team.screenshot_path),
   );
-  const membersCount = teams.reduce(
+  adminTeamsData = registeredTeams;
+  renderAdminCheckinSearch();
+  const membersCount = registeredTeams.reduce(
     (total, team) => total + (team.ideaforge_members?.length ?? 0),
     0,
   );
-  document.querySelector("#total-teams").textContent = String(teams.length);
+  document.querySelector("#total-teams").textContent = String(registeredTeams.length);
   document.querySelector("#total-members").textContent = String(membersCount);
   document.querySelector("#pending-payments").textContent =
     String(teams.filter((team) => team.payment_status === "pending_review").length);
   document.querySelector("#approved-payments").textContent =
     String(teams.filter((team) => team.payment_status === "approved").length);
   document.querySelector("#checked-in-teams").textContent =
-    String(teams.filter((team) => team.checked_in_at).length);
-  renderAdminUsers(teams);
-  renderAdminEmails(emailResult.data ?? [], teams);
+    String(registeredTeams.filter((team) => team.checked_in_at).length);
+  renderAdminUsers(registeredTeams);
+  if (isEmailQueueRoute()) {
+    const { data: emailRows, error: emailError } = await supabase
+      .from("ideaforge_email_outbox")
+      .select("id, team_id, status, attempt_count, retryable, last_error, sent_at, recipient_email, recipient_name, created_at")
+      .order("created_at", { ascending: false });
+    if (emailError) {
+      console.error("Could not load IdeaForge delivery queue.", emailError);
+      showAdminConnectionError("Could not load delivery status. Check the outbox migration and admin permissions.");
+      return;
+    }
+    renderAdminEmails(emailRows ?? [], registeredTeams);
+  }
 
   const toggle = document.querySelector("#toggle-registration");
   toggle.textContent = settingsResult.data.registration_open ? "Close registration" : "Open registration";
@@ -1194,7 +1202,7 @@ async function loadAdminDashboard() {
 
   const list = document.querySelector("#admin-team-list");
   list.replaceChildren();
-  const paymentTeams = teams.filter((team) => Boolean(team.screenshot_path));
+  const paymentTeams = registeredTeams;
   document.querySelector("#admin-payment-count").textContent =
     `${paymentTeams.length} payment submission${paymentTeams.length === 1 ? "" : "s"}`;
 
@@ -1207,7 +1215,6 @@ async function loadAdminDashboard() {
       rejected: "RE-UPLOAD REQUESTED",
     };
     const isPending = team.payment_status === "pending_review";
-    const email = emailByTeam.get(team.id);
     let screenshotUrl = null;
 
     if (team.screenshot_path) {
@@ -1225,7 +1232,6 @@ async function loadAdminDashboard() {
       <div class="admin-member-row">
         <strong>${escapeHtml(member.full_name)}${member.is_team_contact ? " · Team contact" : ""}</strong>
         <span>${escapeHtml(member.college_name)} · ${escapeHtml(member.mobile_number)}</span>
-        <span>${escapeHtml(member.email)}</span>
       </div>`).join("");
     const teamContact = members.find((member) => member.is_team_contact) ?? members[0];
     const paymentHtml = team.payment_utr
@@ -1234,32 +1240,13 @@ async function loadAdminDashboard() {
            ? `<button class="payment-proof-link" type="button" data-payment-proof data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}" data-team-code="${escapeHtml(team.team_code)}" data-contact-name="${escapeHtml(teamContact?.full_name ?? "—")}" data-utr="${escapeHtml(team.payment_utr)}" data-submitted-at="${escapeHtml(team.payment_submitted_at ?? "")}" data-screenshot-url="${escapeHtml(screenshotUrl)}">▧ View screenshot</button>`
            : `<span class="prototype-note">Screenshot unavailable</span>`}`
       : "<span class=\"prototype-note\">UTR unavailable</span>";
-    const emailStatusLabels = {
-      pending: "Queued",
-      sending: "Sending",
-      sent: "Accepted by Gmail",
-      failed: "Needs attention",
-    };
-    const emailStatus = email
-      ? `${emailStatusLabels[email.status] ?? "Unknown"} · ${email.attempt_count} attempt${email.attempt_count === 1 ? "" : "s"}`
-      : team.payment_status === "approved"
-        ? "Queue record missing"
-        : team.payment_status === "rejected"
-          ? "Not sent — payment was rejected"
-          : "Queued automatically after payment approval";
-    const emailError = email?.last_error
-      ? `<p class="prototype-note">${escapeHtml(email.last_error)}</p>`
-      : "";
-    const emailDeliveryNote = email?.status === "sent"
-      ? '<p class="prototype-note">Gmail accepted the message; inbox delivery is not confirmed.</p>'
-      : "";
     const card = document.createElement("article");
     card.className = "admin-team-card";
     card.dataset.paymentStatus = team.payment_status;
     card.innerHTML = `
       <div class="admin-payment-row">
         <div class="payment-team-cell"><strong>${escapeHtml(team.team_name)}</strong><span>${escapeHtml(team.team_code)}</span></div>
-        <div class="payment-contact-cell"><strong>${escapeHtml(teamContact?.full_name ?? "—")}</strong><span>${escapeHtml(teamContact?.email ?? "No contact email")}</span></div>
+        <div class="payment-contact-cell"><strong>${escapeHtml(teamContact?.full_name ?? "—")}</strong></div>
         <div class="payment-proof-cell">${paymentHtml}</div>
         <div><span class="status-pill ${team.payment_status === "approved" ? "approved" : team.payment_status === "rejected" ? "reupload-requested" : ""}">${statusLabels[team.payment_status] ?? "UNKNOWN"}</span></div>
         <div class="payment-date-cell">${team.payment_submitted_at ? new Date(team.payment_submitted_at).toLocaleString() : "—"}</div>
@@ -1268,7 +1255,7 @@ async function loadAdminDashboard() {
         </div>
         <details class="admin-payment-details">
           <summary>Team details</summary>
-          <div class="admin-payment-detail-body"><section><h4>TEAM MEMBERS</h4>${membersHtml}</section><section><h4>PAYMENT PROOF</h4>${paymentHtml}</section><section><h4>EMAIL CONFIRMATION</h4><span class="prototype-note">${emailStatus}</span>${emailError}${emailDeliveryNote}</section></div>
+          <div class="admin-payment-detail-body"><section><h4>TEAM MEMBERS</h4>${membersHtml}</section><section><h4>PAYMENT PROOF</h4>${paymentHtml}</section></div>
         </details>
       </div>`;
     list.append(card);
@@ -1293,7 +1280,6 @@ function renderAdminUsers(teams) {
     const memberRows = members.map((member) => {
       const searchText = [
         member.full_name,
-        member.email,
         member.college_name,
         member.mobile_number,
       ].join(" ").toLowerCase();
@@ -1302,7 +1288,7 @@ function renderAdminUsers(teams) {
           <span class="admin-user-avatar" aria-hidden="true">${escapeHtml(String(member.full_name ?? "").trim().charAt(0).toUpperCase() || "?")}</span>
           <div><strong>${escapeHtml(member.full_name)}</strong>${member.is_team_contact ? '<span class="admin-team-leader">TEAM LEADER</span>' : ""}</div>
         </div>
-        <div class="admin-user-contact"><span>${escapeHtml(member.email)}</span><span>${escapeHtml(member.mobile_number)}</span></div>
+        <div class="admin-user-contact"><span>${escapeHtml(member.mobile_number)}</span></div>
         <div class="admin-user-college">${escapeHtml(member.college_name)}</div>
       </article>`;
     }).join("");
@@ -1872,7 +1858,7 @@ function renderAdminCheckinSearch() {
   if (!query) {
     const hint = document.createElement("p");
     hint.className = "prototype-note";
-    hint.textContent = "Search by team name, team code, participant name, or email.";
+    hint.textContent = "Search by team name, team code, participant name, or phone.";
     results.append(hint);
     return;
   }
@@ -1884,7 +1870,6 @@ function renderAdminCheckinSearch() {
       team.team_code,
       ...members.flatMap((member) => [
         member.full_name,
-        member.email,
         member.mobile_number,
         member.college_name,
       ]),
@@ -1895,7 +1880,7 @@ function renderAdminCheckinSearch() {
   if (matches.length === 0) {
     const empty = document.createElement("p");
     empty.className = "prototype-note";
-    empty.textContent = "No matching team. Try a different name, email, or code.";
+    empty.textContent = "No matching team. Try a different name, phone, or code.";
     results.append(empty);
     return;
   }
@@ -1906,9 +1891,9 @@ function renderAdminCheckinSearch() {
     const details = document.createElement("div");
     const name = document.createElement("strong");
     name.textContent = team.team_name;
-    const contact = (team.ideaforge_members ?? []).find((member) => member.is_team_contact);
     const info = document.createElement("span");
-    info.textContent = `${team.team_code} · ${contact?.full_name ?? "Team"} · ${contact?.email ?? ""}`;
+    const contact = (team.ideaforge_members ?? []).find((member) => member.is_team_contact);
+    info.textContent = `${team.team_code} · ${contact?.full_name ?? "Team"}`;
     details.append(name, info);
     const button = document.createElement("button");
     button.className = "small-button approve";

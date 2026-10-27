@@ -107,6 +107,11 @@ to keep unpaid teams in an incomplete state and withhold the team code until
 the UTR and payment screenshot are submitted. Team leaders can resume payment
 submission from their profile.
 
+Apply
+[`supabase/migrations/20261027230000_ideaforge_defer_team_codes_until_payment.sql`](./supabase/migrations/20261027230000_ideaforge_defer_team_codes_until_payment.sql)
+after the require-payment migration to remove codes from existing unpaid team
+drafts and assign codes only when payment proof is submitted.
+
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)
 to require participant sign-in for team registration and match the team

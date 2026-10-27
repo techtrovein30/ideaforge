@@ -282,6 +282,11 @@
                   <button class="back-button" type="button" id="back-to-team">← Edit team</button>
                 </div>
                 <div class="payment-team-summary" id="payment-team-summary"></div>
+                <div class="payment-amount">
+                  <p class="eyebrow">AMOUNT TO PAY</p>
+                  <strong id="payment-amount">₹0</strong>
+                  <p class="prototype-note">₹99 per team member</p>
+                </div>
                 <div class="payment-qr">
                   <p class="eyebrow">PAY REGISTRATION FEE</p>
                   <img src="/assets/payment%20qr.png" alt="UPI payment QR code for Saveetha School of Engineering" />
@@ -357,7 +362,7 @@
           <button class="admin-nav-button" type="button" data-admin-main-page data-admin-page="payments"><span aria-hidden="true">▣</span> Payments</button>
           <button class="admin-nav-button" type="button" data-admin-main-page data-admin-page="reuploads"><span aria-hidden="true">↻</span> Re-uploads</button>
           <button class="admin-nav-button" type="button" data-admin-main-page data-admin-page="deleted-history"><span aria-hidden="true">◷</span> Deleted History</button>
-          <a class="admin-nav-button" data-admin-route="email-queue" data-admin-nested-route href="/wasd4381/email"><span aria-hidden="true">✉</span> Email Queue</a>
+          <a class="admin-nav-button" data-admin-route="email-queue" data-admin-nested-route href="/wasd4381/email"><span aria-hidden="true">✉</span> Delivery Queue</a>
           <a class="admin-nav-button" data-admin-route="qr-toggle" data-admin-nested-route href="/wasd4381/email/qrtoggle"><span aria-hidden="true">◉</span> QR scanner toggle</a>
           <button class="admin-nav-button" type="button" data-admin-main-page data-admin-page="events"><span aria-hidden="true">▦</span> Events</button>
         </nav>
@@ -389,8 +394,8 @@
           </nav>
           <section class="admin-page" id="admin-overview-page">
             <div class="stats-grid">
-              <article class="stat-card"><span>TOTAL TEAMS</span><strong id="total-teams">0</strong><small>Registered teams</small></article>
-              <article class="stat-card"><span>PARTICIPANTS</span><strong id="total-members">0</strong><small>Across all teams</small></article>
+              <article class="stat-card"><span>REGISTERED TEAMS</span><strong id="total-teams">0</strong><small>Payment details submitted</small></article>
+              <article class="stat-card"><span>PARTICIPANTS</span><strong id="total-members">0</strong><small>Across registered teams</small></article>
               <article class="stat-card stat-card-pending"><span>PENDING PAYMENTS</span><strong id="pending-payments">0</strong><small>Awaiting verification</small></article>
               <article class="stat-card stat-card-checked"><span>TEAMS CHECKED IN</span><strong id="checked-in-teams">0</strong><small>Event attendance</small></article>
               <article class="stat-card stat-card-approved"><span>PAYMENTS APPROVED</span><strong id="approved-payments">0</strong><small>Confirmed registrations</small></article>
@@ -423,7 +428,7 @@
           <section class="admin-page admin-registrations" id="admin-users-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div><span class="prototype-note" id="admin-user-count">0 participants</span></div>
             <div class="admin-toolbar">
-              <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-user-search" type="search" placeholder="Search name, email, college, team, or phone…" autocomplete="off" /></label>
+              <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-user-search" type="search" placeholder="Search name, college, team, or phone…" autocomplete="off" /></label>
             </div>
             <div id="admin-user-list" class="admin-user-list"></div>
             <div class="empty-state" id="admin-users-empty" hidden><span>✳</span><strong>No matching participants</strong><p>Try a different search.</p></div>
@@ -439,7 +444,7 @@
               </div>
               <div class="checkin-form">
                 <label class="field-label" for="checkin-search">Search team or participant</label>
-                <input class="text-input" id="checkin-search" type="search" autocomplete="off" placeholder="Team name, code, member, or email" />
+                <input class="text-input" id="checkin-search" type="search" autocomplete="off" placeholder="Team name, code, member, or phone" />
                 <div class="checkin-result" id="checkin-result" role="status" aria-live="polite" hidden></div>
                 <div class="checkin-search-results" id="checkin-search-results" aria-live="polite"></div>
               </div>
