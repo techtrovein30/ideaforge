@@ -129,11 +129,12 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .payment-team-summary { padding: 12px 14px; background: #1a1a1a; color: #c5beba; font-size: 11px; line-height: 1.7; border-left: 2px solid var(--red); }
 .payment-qr { display: grid; justify-items: center; gap: 10px; margin-top: 18px; padding: 16px; border: 1px solid var(--line); background: #111; text-align: center; }
 .payment-qr .eyebrow { margin: 0; }
-.payment-qr img { display: block; width: min(100%, 340px); height: auto; background: #fff; }
+.payment-qr img { display: block; width: min(100%, 420px); height: auto; background: #fff; }
 .payment-qr p:last-child { max-width: 440px; margin: 0; color: #a8a09c; font-size: 11px; line-height: 1.6; }
-.payment-proof-example { margin: 18px 0 0; padding: 14px; border: 1px solid var(--line); background: #111; }
+.payment-proof-example { width: 100%; margin: 4px 0 0; padding: 12px; border: 1px solid var(--line); background: #111; }
 .payment-proof-example img { display: block; width: min(100%, 540px); height: auto; margin: 0 auto; }
 .payment-proof-example figcaption { margin-top: 10px; color: #a8a09c; font-size: 11px; line-height: 1.6; text-align: center; }
+.payment-utr-warning { margin: 12px 0 0; padding: 14px; border: 1px solid rgba(255, 81, 67, .5); background: rgba(255, 81, 67, .1); color: #ff887d; font-size: clamp(14px, 2.4vw, 18px); font-weight: 900; line-height: 1.4; text-align: center; }
 .upload-field { margin-top: 20px; }
 .upload-field .field-label { margin-top: 0; }
 .upload-box { min-height: 122px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; border: 1px dashed rgba(255,255,255,.22); background: #171717; cursor: pointer; color: #d8d1ce; }

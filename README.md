@@ -99,6 +99,14 @@ after the participant check-in migration to accept valid college and other
 email domains during registration. The team leader still signs in with Google,
 and their entered email must match that signed-in account.
 
+Apply
+[`supabase/migrations/20261027220000_ideaforge_require_payment_before_registration.sql`](./supabase/migrations/20261027220000_ideaforge_require_payment_before_registration.sql)
+after all earlier participant migrations, including
+[`supabase/migrations/20261027181500_ideaforge_duplicate_member_email_message.sql`](./supabase/migrations/20261027181500_ideaforge_duplicate_member_email_message.sql),
+to keep unpaid teams in an incomplete state and withhold the team code until
+the UTR and payment screenshot are submitted. Team leaders can resume payment
+submission from their profile.
+
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)
 to require participant sign-in for team registration and match the team

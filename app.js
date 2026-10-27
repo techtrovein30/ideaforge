@@ -43,15 +43,22 @@ let adminTeamsData = [];
 
 function updateRegistrationLinks() {
   const isRegistered = participantTeamStatus === "registered";
+  const isIncomplete = participantTeamStatus === "incomplete";
   const registrationLink = document.querySelector("#registration-nav-link");
-  registrationLink.href = isRegistered ? "#profile" : "#register";
-  registrationLink.textContent = isRegistered ? "View registration" : "Register";
+  registrationLink.href = isRegistered || isIncomplete ? "#profile" : "#register";
+  registrationLink.textContent = isRegistered
+    ? "View registration"
+    : isIncomplete
+      ? "Finish registration"
+      : "Register";
   const heroLink = document.querySelector("#hero-registration-link");
   if (heroLink) {
-    heroLink.href = isRegistered ? "#profile" : "#register";
+    heroLink.href = isRegistered || isIncomplete ? "#profile" : "#register";
     heroLink.textContent = isRegistered
       ? "You’ve already registered — view your profile"
-      : "Register your team";
+      : isIncomplete
+        ? "Complete your registration"
+        : "Register your team";
   }
   const profileLink = document.querySelector("#profile-nav-link");
   profileLink.textContent = participantUser ? "My profile" : "Sign in / Profile";
@@ -71,6 +78,7 @@ function clearOAuthTokensFromUrl() {
 function updateParticipantProfile(user) {
   participantUser = user;
   activeParticipantTeam = null;
+  draftTeam = null;
   const profileLink = document.querySelector("#profile-nav-link");
   const signedOutPanel = document.querySelector("#profile-signed-out");
   const signedInPanel = document.querySelector("#profile-signed-in");
@@ -78,6 +86,7 @@ function updateParticipantProfile(user) {
   const paymentCard = document.querySelector("#profile-payment-card");
   const teamMessage = document.querySelector("#profile-team-message");
   const registerLink = document.querySelector("#profile-register-link");
+  registerLink.innerHTML = "Register your team <span>↗</span>";
 
   participantTeamStatus = user ? "checking" : "none";
   profileLink.textContent = user ? "My profile" : "Sign in / Profile";
@@ -144,6 +153,31 @@ async function loadParticipantTeam(userId) {
     return;
   }
 
+  const paymentSubmitted = team.payment_status !== "awaiting_payment";
+  participantTeamStatus = paymentSubmitted ? "registered" : "incomplete";
+  updateRegistrationLinks();
+  document.querySelector("#profile-team-code").textContent =
+    paymentSubmitted ? team.team_code || "—" : "Issued after payment submission";
+  document.querySelector("#profile-team-registered").textContent =
+    team.created_at ? new Date(team.created_at).toLocaleString() : "—";
+  if (!paymentSubmitted && team.is_team_contact) {
+    draftTeam = {
+      id: team.team_id,
+      teamName: team.team_name,
+      members: (team.members ?? []).map((member) => ({
+        name: member.full_name,
+        college: member.college_name,
+        mobile: member.mobile_number,
+        email: member.email,
+      })),
+      createdAt: team.created_at,
+    };
+    document.querySelector("#payment-team-summary").textContent =
+      `${draftTeam.teamName} · ${draftTeam.members.length} members · Team contact: ${draftTeam.members[0]?.name ?? "Team leader"}`;
+  } else {
+    draftTeam = null;
+  }
+
   const { data: checkinSetting, error: checkinSettingError } = await supabase
     .from("ideaforge_settings")
     .select("participant_checkin_enabled")
@@ -158,19 +192,17 @@ async function loadParticipantTeam(userId) {
   } else {
     participantCheckinEnabled = checkinSetting?.participant_checkin_enabled === true;
   }
-  document.querySelector(".profile-team-qr-card").hidden = !participantCheckinEnabled;
+  document.querySelector(".profile-team-qr-card").hidden =
+    !participantCheckinEnabled || !paymentSubmitted;
 
-  participantTeamStatus = "registered";
-  updateRegistrationLinks();
   document.querySelector("#profile-team-name").textContent = team.team_name;
-  document.querySelector("#profile-team-code").textContent = team.team_code;
-  document.querySelector("#profile-team-registered").textContent =
-    team.created_at ? new Date(team.created_at).toLocaleString() : "—";
   document.querySelector("#profile-team-checkin").textContent = team.checked_in_at
     ? `Checked in at ${new Date(team.checked_in_at).toLocaleString()}`
     : "Not checked in";
   document.querySelector("#profile-note").textContent = team.payment_status === "awaiting_payment"
-    ? "Your team is registered, but payment proof has not been submitted. Contact the organizers if you still need to submit it."
+    ? team.is_team_contact
+      ? "Your team details are saved, but registration is incomplete. Submit the UTR and payment screenshot below to complete registration."
+      : "Your team details are saved, but registration is incomplete until the team leader submits the UTR and payment screenshot."
     : team.payment_status === "pending_review"
       ? "Your registration is saved. Payment proof is waiting for admin review."
       : team.payment_status === "approved"
@@ -244,7 +276,10 @@ async function loadParticipantTeam(userId) {
   }
   teamCard.hidden = false;
   teamMessage.textContent = "";
-  registerLink.hidden = true;
+  registerLink.hidden = paymentSubmitted || !team.is_team_contact;
+  if (!paymentSubmitted && team.is_team_contact) {
+    registerLink.innerHTML = "Continue to payment <span>↗</span>";
+  }
   refreshRegistrationState();
 }
 
@@ -458,11 +493,13 @@ function refreshRegistrationState() {
   const closed = document.querySelector("#registration-closed");
   const authRequired = document.querySelector("#registration-auth-required");
   const alreadyRegistered = document.querySelector("#registration-already-registered");
+  const incompleteRegistration = document.querySelector("#registration-incomplete");
   setup.hidden = true;
   configError.hidden = true;
   closed.hidden = true;
   authRequired.hidden = true;
   alreadyRegistered.hidden = true;
+  incompleteRegistration.hidden = true;
   teamForm.hidden = true;
   paymentForm.hidden = true;
 
@@ -489,6 +526,19 @@ function refreshRegistrationState() {
 
   if (participantUser && participantTeamStatus === "registered") {
     alreadyRegistered.hidden = false;
+    return;
+  }
+
+  if (participantUser && participantTeamStatus === "incomplete") {
+    if (activeParticipantTeam && !activeParticipantTeam.is_team_contact) {
+      incompleteRegistration.querySelector("p").textContent =
+        "Your team details are saved, but only the team leader can submit the UTR and payment screenshot.";
+    } else {
+      incompleteRegistration.querySelector("p").textContent =
+        "Submit your UTR and payment screenshot from your profile to complete registration.";
+    }
+    incompleteRegistration.hidden = Boolean(draftTeam);
+    paymentForm.hidden = !draftTeam;
     return;
   }
 
