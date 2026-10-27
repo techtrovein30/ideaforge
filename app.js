@@ -395,15 +395,24 @@ if (supabase) {
         if (!session || event === "SIGNED_IN" || event === "INITIAL_SESSION") {
           void renderAdmin();
         }
-      } else if (session && event === "SIGNED_IN") {
-        window.location.hash = "#profile";
-      } else {
-        refreshRegistrationState();
+        return;
       }
+      if (session && event === "SIGNED_IN") {
+        if (sessionStorage.getItem("ideaforge_admin_intent") === "1") {
+          sessionStorage.removeItem("ideaforge_admin_intent");
+          window.location.pathname = "/wasd4381";
+          window.location.search = "";
+          window.location.hash = "";
+          return;
+        }
+        window.location.hash = "#profile";
+        return;
+      }
+      refreshRegistrationState();
     }, 0);
   });
 
-  supabase.auth.getSession().then(({ data, error }) => {
+  supabase.auth.getSession().then(async ({ data, error }) => {
     clearOAuthTokensFromUrl();
     if (error) {
       console.error("Could not restore IdeaForge participant session.", error);
@@ -412,7 +421,16 @@ if (supabase) {
       updateParticipantProfile(data.session?.user ?? null);
     }
     participantAuthReady = true;
-    if (!isAdminRoute()) refreshRegistrationState();
+    if (!isAdminRoute()) {
+      if (data.session && sessionStorage.getItem("ideaforge_admin_intent") === "1") {
+        sessionStorage.removeItem("ideaforge_admin_intent");
+        window.location.pathname = "/wasd4381";
+        window.location.search = "";
+        window.location.hash = "";
+        return;
+      }
+      refreshRegistrationState();
+    }
   }).catch((error) => {
     clearOAuthTokensFromUrl();
     console.error("Could not initialize IdeaForge authentication.", error);
@@ -1429,17 +1447,20 @@ document.querySelector("#admin-google-sign-in").addEventListener("click", async 
   button.disabled = true;
   button.textContent = "Opening Google…";
   try {
-    const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+    sessionStorage.setItem("ideaforge_admin_intent", "1");
+    const redirectTo = `${window.location.origin}/wasd4381`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },
     });
     if (error) {
       console.error("Google sign-in could not be started.", error);
+      sessionStorage.removeItem("ideaforge_admin_intent");
       showAdminLogin("Google sign-in could not be started. Please try again.");
     }
   } catch (error) {
     console.error("Unexpected error starting Google sign-in.", error);
+    sessionStorage.removeItem("ideaforge_admin_intent");
     showAdminLogin("Google sign-in could not be started. Please try again.");
   } finally {
     button.disabled = false;
