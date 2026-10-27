@@ -1025,10 +1025,11 @@ async function loadAdminDashboard() {
 
   const list = document.querySelector("#admin-team-list");
   list.replaceChildren();
+  const paymentTeams = teams.filter((team) => Boolean(team.screenshot_path));
   document.querySelector("#admin-payment-count").textContent =
-    `${teams.length} team${teams.length === 1 ? "" : "s"}`;
+    `${paymentTeams.length} payment submission${paymentTeams.length === 1 ? "" : "s"}`;
 
-  for (const team of teams) {
+  for (const team of paymentTeams) {
     const members = team.ideaforge_members ?? [];
     const statusLabels = {
       awaiting_payment: "AWAITING PAYMENT",
@@ -1063,7 +1064,7 @@ async function loadAdminDashboard() {
          ${screenshotUrl
            ? `<button class="payment-proof-link" type="button" data-payment-proof data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}" data-team-code="${escapeHtml(team.team_code)}" data-contact-name="${escapeHtml(teamContact?.full_name ?? "—")}" data-utr="${escapeHtml(team.payment_utr)}" data-submitted-at="${escapeHtml(team.payment_submitted_at ?? "")}" data-screenshot-url="${escapeHtml(screenshotUrl)}">▧ View screenshot</button>`
            : `<span class="prototype-note">Screenshot unavailable</span>`}`
-      : "<span class=\"prototype-note\">Not submitted</span>";
+      : "<span class=\"prototype-note\">UTR unavailable</span>";
     const emailStatusLabels = {
       pending: "Queued",
       sending: "Sending",

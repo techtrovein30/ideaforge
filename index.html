@@ -394,7 +394,7 @@
             <div class="admin-toolbar">
               <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-payment-search" type="search" placeholder="Search team, code, contact, or UTR…" autocomplete="off" /></label>
               <select class="text-input admin-filter" id="admin-payment-filter" aria-label="Filter payments">
-                <option value="all">All payments</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="awaiting_payment">Awaiting payment</option>
+                <option value="all">All submissions</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Re-upload requested</option>
               </select>
             </div>
             <div class="admin-payment-table">
@@ -403,7 +403,7 @@
               </div>
               <div id="admin-team-list" class="admin-team-list"></div>
             </div>
-            <div class="empty-state" id="admin-empty"><span>✳</span><strong>No registrations found</strong><p>Adjust your search or payment filter.</p></div>
+            <div class="empty-state" id="admin-empty"><span>✳</span><strong>No payment proofs found</strong><p>Only teams that have submitted a payment screenshot appear here. Adjust your search or filter.</p></div>
           </section>
           <section class="admin-page admin-registrations" id="admin-users-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div><span class="prototype-note" id="admin-user-count">0 participants</span></div>
