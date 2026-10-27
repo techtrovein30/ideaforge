@@ -52,9 +52,14 @@ table.
 ## Hosting
 
 - Production domain or preferred deployment location.
-- Confirm that the host will serve this standalone folder and rewrite
-  `/wasd4381` to `index.html` so the admin route works on refresh. The Vite
-  development server already supports this route.
+- Serve this standalone folder as the project root and rewrite `/wasd4381` to
+  `index.html` so the admin route works on refresh. The Vercel configuration
+  for this rewrite is in [`vercel.json`](./vercel.json); other hosts need an
+  equivalent rewrite. The Vite development server already supports this route.
+- Apply
+  [`supabase/migrations/20261026260000_ideaforge_participant_checkin.sql`](./supabase/migrations/20261026260000_ideaforge_participant_checkin.sql)
+  before using participant QR check-in. Admins display a five-minute QR, and
+  participants scan it from their signed-in profile.
 
 The `/wasd4381` path is only a prototype URL, not an access-control mechanism.
 Before launch, the admin panel must use real authentication and server-side

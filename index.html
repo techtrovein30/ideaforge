@@ -29,8 +29,8 @@
         <nav aria-label="Main navigation">
           <a href="#about">The challenge</a>
           <a href="#rules">Rules</a>
-          <a href="#register" class="nav-cta">Register <span aria-hidden="true">↗</span></a>
-          <a href="#profile" id="profile-nav-link">Sign in</a>
+          <a href="#register" class="nav-cta" id="registration-nav-link">Register <span aria-hidden="true">↗</span></a>
+          <a href="#profile" id="profile-nav-link">Sign in / Profile</a>
         </nav>
       </header>
 
@@ -57,6 +57,7 @@
                   <div class="profile-info-grid">
                     <div><span>TEAM CODE</span><strong id="profile-team-code"></strong></div>
                     <div><span>REGISTERED</span><strong id="profile-team-registered"></strong></div>
+                    <div><span>ATTENDANCE</span><strong id="profile-team-checkin">Not checked in</strong></div>
                   </div>
                   <section class="profile-members">
                     <h3>Team members</h3>
@@ -64,9 +65,14 @@
                   </section>
                 </div>
                 <aside class="profile-team-qr-card">
-                  <p class="eyebrow">TEAM CHECK-IN QR</p>
-                  <canvas id="profile-team-qr" aria-label="Team check-in QR code"></canvas>
-                  <p>Show this QR to the event team at check-in. It checks in your whole team.</p>
+                  <p class="eyebrow">EVENT CHECK-IN</p>
+                  <p>At the event, scan the active check-in QR displayed by an admin to mark your whole team present.</p>
+                  <video id="participant-checkin-video" aria-label="Scan the admin check-in QR" muted playsinline hidden></video>
+                  <div class="checkin-scanner-actions">
+                    <button class="small-button approve" id="start-participant-checkin-scanner" type="button">Scan admin QR</button>
+                    <button class="small-button" id="stop-participant-checkin-scanner" type="button" disabled>Stop camera</button>
+                  </div>
+                  <p class="prototype-note" id="participant-checkin-message" role="status"></p>
                 </aside>
               </section>
               <section class="profile-payment-card" id="profile-payment-card" hidden>
@@ -86,7 +92,7 @@
               </section>
               <form class="profile-payment-resubmit" id="profile-payment-resubmit" hidden>
                 <p class="eyebrow">PAYMENT ACTION REQUIRED</p>
-                <h2>Upload a new payment proof</h2>
+                <h2 id="profile-payment-form-title">Upload a new payment proof</h2>
                 <p id="profile-payment-note"></p>
                 <label class="field-label" for="profile-payment-utr-input">UTR / transaction ID</label>
                 <input class="text-input" id="profile-payment-utr-input" name="utr" minlength="4" maxlength="80" required />
@@ -110,7 +116,7 @@
                 solution with your team.
             </p>
             <div class="hero-actions">
-              <a class="button button-primary" href="#register">Register your team <span>↗</span></a>
+              <a class="button button-primary" id="hero-registration-link" href="#register">Register your team <span>↗</span></a>
               <a class="text-link" href="#rules">Explore the rules <span>↓</span></a>
             </div>
             <div class="hero-facts">
@@ -230,6 +236,14 @@
                   <a class="text-link" href="#profile">Go to sign in <span>↗</span></a>
                 </div>
               </div>
+              <div id="registration-already-registered" class="closed-notice registration-already-registered" hidden>
+                <span class="closed-icon">✓</span>
+                <div>
+                  <strong>You’ve already registered.</strong>
+                  <p>Your team and registration status are available in your profile.</p>
+                  <a class="text-link" href="#profile">View your profile <span>↗</span></a>
+                </div>
+              </div>
               <form id="team-form" hidden>
                 <div class="form-heading">
                   <div><span class="form-overline">STEP 01 / 02</span><h3>Team details</h3></div>
@@ -287,7 +301,7 @@
                   <span>TEAM REGISTRATION CODE</span>
                   <div><strong id="success-registration-code"></strong><button class="icon-button" id="copy-registration-code" type="button" aria-label="Copy team registration code">▢</button></div>
                 </div>
-                <p class="prototype-note">Keep your team code safe. You can also find your team details and check-in QR in your profile.</p>
+                <p class="prototype-note">Keep your team code safe. Your profile shows registration and attendance status.</p>
                 <div class="success-actions">
                   <a class="button button-primary" href="#profile">View your profile <span>↗</span></a>
                   <a class="button success-secondary-button" href="#home">Back to events</a>
@@ -364,7 +378,7 @@
               <div class="admin-shortcuts">
                 <button type="button" data-admin-page="payments"><span>▤</span><strong>Review payments</strong><small>Verify payment proofs and UTRs</small><b>→</b></button>
                 <button type="button" data-admin-page="users"><span>♙</span><strong>Find a participant</strong><small>Search registered team members</small><b>→</b></button>
-                <button type="button" data-admin-page="checkin"><span>✓</span><strong>Open check-in</strong><small>Scan a team QR or enter its code</small><b>→</b></button>
+                <button type="button" data-admin-page="checkin"><span>✓</span><strong>Open check-in</strong><small>Search for a team and mark attendance</small><b>→</b></button>
                 <button type="button" data-admin-page="emails"><span>✉</span><strong>Check Gmail outbox</strong><small>Review confirmations and retries</small><b>→</b></button>
             </section>
           </section>
@@ -396,22 +410,20 @@
             <div class="empty-state" id="admin-users-empty" hidden><span>✳</span><strong>No matching participants</strong><p>Try a different search.</p></div>
           </section>
           <section class="admin-page admin-registrations" id="admin-checkin-page" hidden>
-            <div class="admin-table-heading"><div><p class="eyebrow">EVENT ARRIVAL</p><h2>Team check-in</h2></div><span class="prototype-note">Scan the team QR or enter its code</span></div>
+            <div class="admin-table-heading"><div><p class="eyebrow">EVENT ARRIVAL</p><h2>Team check-in</h2></div><span class="prototype-note">Display a short-lived QR for participants or search to check in a team</span></div>
             <div class="checkin-layout">
               <div class="checkin-scanner">
-                <video id="checkin-video" aria-label="Live QR scanner" muted playsinline></video>
-                <div class="checkin-scanner-actions">
-                  <button class="small-button approve" id="start-checkin-scanner" type="button">Start camera scanner</button>
-                  <button class="small-button" id="stop-checkin-scanner" type="button" disabled>Stop camera</button>
-                </div>
-                <p class="prototype-note" id="checkin-scanner-message" role="status">Camera access requires a secure HTTPS connection and permission.</p>
+                <p class="eyebrow">PARTICIPANT SELF CHECK-IN</p>
+                <canvas id="admin-checkin-qr" aria-label="Temporary participant check-in QR code" hidden></canvas>
+                <button class="small-button approve" id="create-checkin-qr" type="button">Display check-in QR</button>
+                <p class="prototype-note" id="admin-checkin-qr-message" role="status">The QR expires after five minutes. Participants must sign in and scan it from their profile.</p>
               </div>
-              <form class="checkin-form" id="checkin-form">
-                <label class="field-label" for="checkin-code">Team code</label>
-                <input class="text-input" id="checkin-code" name="teamCode" autocomplete="off" required />
-                <button class="button button-primary" type="submit">Check in team <span>↗</span></button>
+              <div class="checkin-form">
+                <label class="field-label" for="checkin-search">Search team or participant</label>
+                <input class="text-input" id="checkin-search" type="search" autocomplete="off" placeholder="Team name, code, member, or email" />
                 <div class="checkin-result" id="checkin-result" role="status" aria-live="polite" hidden></div>
-              </form>
+                <div class="checkin-search-results" id="checkin-search-results" aria-live="polite"></div>
+              </div>
             </div>
           </section>
           <section class="admin-page admin-registrations" id="admin-emails-page" hidden>

@@ -19,6 +19,11 @@ npm run build
 npm run preview
 ```
 
+The admin console is available at `/wasd4381`. For Vercel deployments, keep
+[`vercel.json`](./vercel.json) in the configured project root so Vercel serves
+the app for that route instead of returning a 404. Redeploy after adding or
+changing the rewrite configuration.
+
 Copy `.env.example` to `.env` for local, browser-safe Supabase configuration.
 The service-role key must only be configured in a trusted backend or Supabase
 Edge Function secret store; never add it to this frontend project.
@@ -32,20 +37,24 @@ Add the local origin and production origin to Supabase Authentication's
 redirect URL allow list so Google OAuth can return to the admin route.
 
 The public registration form saves teams and members to Supabase and uploads
-payment screenshots to the private `ideaforge-payment-proofs` bucket. The
-registration form requires a Google-authenticated participant and uses that
-account's email for the team contact. The admin route also uses Google OAuth
-and checks the `ideaforge_admins` table before showing live registration data
-or controls.
+payment screenshots to the private `ideaforge-payment-proofs` bucket. It
+requires a Google-authenticated participant and uses that account's email for
+the team contact. Every team member can sign in with their own registered
+email to view team registration and attendance status. Registered accounts
+are directed to their profile instead of being offered another registration.
+The admin route also uses Google OAuth and checks the `ideaforge_admins` table
+before showing live registration data or controls.
 
 The admin console includes payment review, registration totals, a searchable
-participant directory, team check-in by QR scan or team code, and a Gmail
-confirmation outbox with safe retry controls. Apply
+participant directory, team check-in by search, and a Gmail confirmation
+outbox with safe retry controls. Admins can display a five-minute check-in QR
+that authenticated participants scan from their profiles. Applying the
+participant check-in migration below is required for this feature. Apply
 [`supabase/migrations/20261026210000_ideaforge_admin_checkin.sql`](./supabase/migrations/20261026210000_ideaforge_admin_checkin.sql)
 after the base schema and email-confirmation migration. It assigns each team a
-unique code, displays its QR in the signed-in team leader's profile, and adds
-admin-only check-in recording. The payment approval email includes the team
-code; redeploy the email-worker Edge Function after applying the migration.
+unique code and adds admin-only check-in recording. The payment approval email
+includes the team code; redeploy the email-worker Edge Function after applying
+the migration.
 
 Apply
 [`supabase/migrations/20261026220000_ideaforge_payment_reupload.sql`](./supabase/migrations/20261026220000_ideaforge_payment_reupload.sql)
@@ -62,7 +71,7 @@ changed.
 Apply
 [`supabase/migrations/20261026240000_ideaforge_participant_profile.sql`](./supabase/migrations/20261026240000_ideaforge_participant_profile.sql)
 after the short-team-code migration to show the signed-in team leader's
-registration time, member roster, payment details, and check-in QR on their
+registration time, member roster, payment details, and check-in status on their
 profile. It also restricts replacement payment submissions to teams whose
 latest admin review explicitly requested a re-upload.
 
@@ -70,6 +79,13 @@ Apply
 [`supabase/migrations/20261026250000_ideaforge_2k26_rules_and_team_limit.sql`](./supabase/migrations/20261026250000_ideaforge_2k26_rules_and_team_limit.sql)
 after the participant-profile migration to update the registration limit to
 five members. The website publishes the IDEAFORGE 2K26 participant rules.
+
+Apply
+[`supabase/migrations/20261026260000_ideaforge_participant_checkin.sql`](./supabase/migrations/20261026260000_ideaforge_participant_checkin.sql)
+after the team-limit migration. It lets all registered team members view their
+team's profile and check-in status, creates short-lived admin check-in QR
+sessions, and limits participant self-check-in to an authenticated member of
+that team. Payment proof remains visible only to the team contact.
 
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)

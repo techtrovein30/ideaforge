@@ -30,6 +30,25 @@ let participantAuthReady = !supabase;
 let adminEmailsData = [];
 let activeEmailFilter = "all";
 let activeParticipantTeam = null;
+let participantTeamStatus = "checking";
+let participantCheckinScannerControls = null;
+let adminTeamsData = [];
+
+function updateRegistrationLinks() {
+  const isRegistered = participantTeamStatus === "registered";
+  const registrationLink = document.querySelector("#registration-nav-link");
+  registrationLink.href = isRegistered ? "#profile" : "#register";
+  registrationLink.textContent = isRegistered ? "View registration" : "Register";
+  const heroLink = document.querySelector("#hero-registration-link");
+  if (heroLink) {
+    heroLink.href = isRegistered ? "#profile" : "#register";
+    heroLink.textContent = isRegistered
+      ? "You’ve already registered — view your profile"
+      : "Register your team";
+  }
+  const profileLink = document.querySelector("#profile-nav-link");
+  profileLink.textContent = participantUser ? "My profile" : "Sign in / Profile";
+}
 
 function clearOAuthTokensFromUrl() {
   const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -53,13 +72,17 @@ function updateParticipantProfile(user) {
   const teamMessage = document.querySelector("#profile-team-message");
   const registerLink = document.querySelector("#profile-register-link");
 
-  profileLink.textContent = user ? "Profile" : "Sign in";
+  participantTeamStatus = user ? "checking" : "none";
+  profileLink.textContent = user ? "My profile" : "Sign in / Profile";
   signedOutPanel.hidden = Boolean(user);
   signedInPanel.hidden = !user;
   teamCard.hidden = true;
   paymentCard.hidden = true;
   teamMessage.textContent = "";
   registerLink.hidden = false;
+  document.querySelector("#participant-checkin-message").textContent = "";
+  stopParticipantCheckinScanner();
+  updateRegistrationLinks();
   const teamContactEmail = document.querySelector("#member-0-email");
   if (teamContactEmail) {
     teamContactEmail.value = user?.email ?? "";
@@ -82,6 +105,8 @@ async function loadParticipantTeam(userId) {
   const reuploadForm = document.querySelector("#profile-payment-resubmit");
   if (!supabase || !participantUser || participantUser.id !== userId) return;
 
+  participantTeamStatus = "checking";
+  updateRegistrationLinks();
   teamMessage.textContent = "Checking for your team…";
   teamCard.hidden = true;
   paymentCard.hidden = true;
@@ -90,21 +115,39 @@ async function loadParticipantTeam(userId) {
   if (participantUser?.id !== userId) return;
   if (error) {
     console.error("Could not load the participant's IdeaForge team.", error);
+    participantTeamStatus = "error";
+    updateRegistrationLinks();
     teamMessage.textContent = "Your team profile is temporarily unavailable. Please reload and try again.";
+    refreshRegistrationState();
     return;
   }
 
   const team = data;
   activeParticipantTeam = team;
   if (!team) {
+    participantTeamStatus = "none";
+    updateRegistrationLinks();
     teamMessage.textContent = "No team is registered with this Google account yet.";
+    refreshRegistrationState();
     return;
   }
 
+  participantTeamStatus = "registered";
+  updateRegistrationLinks();
   document.querySelector("#profile-team-name").textContent = team.team_name;
   document.querySelector("#profile-team-code").textContent = team.team_code;
   document.querySelector("#profile-team-registered").textContent =
     team.created_at ? new Date(team.created_at).toLocaleString() : "—";
+  document.querySelector("#profile-team-checkin").textContent = team.checked_in_at
+    ? `Checked in at ${new Date(team.checked_in_at).toLocaleString()}`
+    : "Not checked in";
+  document.querySelector("#profile-note").textContent = team.payment_status === "awaiting_payment"
+    ? "Your team is registered. Submit your payment proof below to complete registration."
+    : team.payment_status === "pending_review"
+      ? "Your registration is saved. Payment proof is waiting for admin review."
+      : team.payment_status === "approved"
+        ? "Your registration is confirmed. Your team check-in status is shown below."
+        : "Your registration and payment need attention. Check the details below.";
 
   const memberList = document.querySelector("#profile-team-members");
   memberList.replaceChildren();
@@ -133,7 +176,7 @@ async function loadParticipantTeam(userId) {
   proofImage.removeAttribute("src");
   proofImage.hidden = false;
   proofMessage.hidden = true;
-  if (team.screenshot_path) {
+  if (team.is_team_contact && team.screenshot_path) {
     const { data: proofData, error: proofError } = await supabase.storage
       .from(PAYMENT_BUCKET)
       .createSignedUrl(team.screenshot_path, 300);
@@ -151,26 +194,25 @@ async function loadParticipantTeam(userId) {
   }
   paymentCard.hidden = false;
 
-  if (team.can_resubmit === true) {
+  const needsInitialPayment = team.is_team_contact && team.payment_status === "awaiting_payment";
+  if (needsInitialPayment || team.can_resubmit === true) {
+    const initialPaymentForm = document.querySelector("#profile-payment-resubmit");
+    document.querySelector("#profile-payment-form-title").textContent = needsInitialPayment
+      ? "Submit your payment proof"
+      : "Upload a new payment proof";
+    document.querySelector("#profile-payment-resubmit-button").innerHTML = needsInitialPayment
+      ? "Submit payment proof <span>↗</span>"
+      : "Resubmit payment proof <span>↗</span>";
     document.querySelector("#profile-payment-note").textContent =
-      team.payment_note || "Please upload a clear payment proof and verify the UTR before resubmitting.";
-    reuploadForm.hidden = false;
+      needsInitialPayment
+        ? "Complete your registration by entering the UTR and uploading a clear payment screenshot."
+        : team.payment_note || "Please upload a clear payment proof and verify the UTR before resubmitting.";
+    initialPaymentForm.hidden = false;
   }
-  try {
-    await QRCode.toCanvas(document.querySelector("#profile-team-qr"), team.team_code, {
-      width: 190,
-      margin: 1,
-      color: { dark: "#090909", light: "#ffffff" },
-    });
-  } catch (qrError) {
-    console.error("Could not generate the participant's team QR code.", qrError);
-    teamMessage.textContent = "Your team is registered, but its QR code could not be generated. Reload to try again.";
-    return;
-  }
-
   teamCard.hidden = false;
   teamMessage.textContent = "";
   registerLink.hidden = true;
+  refreshRegistrationState();
 }
 
 document.querySelector("#profile-payment-screenshot").addEventListener("change", (event) => {
@@ -201,7 +243,10 @@ document.querySelector("#profile-payment-resubmit").addEventListener("submit", a
   event.preventDefault();
   const form = event.currentTarget;
   if (!supabase || !activeParticipantTeam) return;
-  if (activeParticipantTeam.can_resubmit !== true) {
+  const isInitialPaymentSubmission =
+    activeParticipantTeam.is_team_contact === true
+    && activeParticipantTeam.payment_status === "awaiting_payment";
+  if (!isInitialPaymentSubmission && activeParticipantTeam.can_resubmit !== true) {
     showToast("Payment resubmission is available only after an admin requests a re-upload.");
     return;
   }
@@ -252,7 +297,9 @@ document.querySelector("#profile-payment-resubmit").addEventListener("submit", a
     showToast("Could not resubmit payment proof because of a network error.");
   } finally {
     submitButton.disabled = false;
-    submitButton.innerHTML = "Resubmit payment proof <span>↗</span>";
+    submitButton.innerHTML = activeParticipantTeam?.payment_status === "awaiting_payment"
+      ? "Submit payment proof <span>↗</span>"
+      : "Resubmit payment proof <span>↗</span>";
   }
 });
 
@@ -266,6 +313,8 @@ if (supabase) {
         if (session && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) {
           void renderAdmin();
         }
+      } else if (session && event === "SIGNED_IN") {
+        window.location.hash = "#profile";
       } else {
         refreshRegistrationState();
       }
@@ -314,6 +363,9 @@ function showToast(message, isAdmin = false) {
 }
 
 function renderMembers() {
+  const previousValues = new Map(
+    [...membersList.querySelectorAll("input")].map((input) => [input.id, input.value]),
+  );
   membersList.innerHTML = "";
   for (let index = 0; index < memberCount; index += 1) {
     const card = document.createElement("section");
@@ -328,9 +380,12 @@ function renderMembers() {
       </div>`;
     membersList.append(card);
   }
+  for (const input of membersList.querySelectorAll("input")) {
+    input.value = previousValues.get(input.id) ?? "";
+  }
   const teamContactEmail = document.querySelector("#member-0-email");
   if (teamContactEmail) {
-    teamContactEmail.value = participantUser?.email ?? "";
+    teamContactEmail.value = participantUser?.email ?? previousValues.get("member-0-email") ?? "";
     teamContactEmail.readOnly = Boolean(participantUser?.email);
   }
   document.querySelector("#member-count").textContent = `${memberCount} / ${MAX_MEMBER_COUNT}`;
@@ -343,10 +398,12 @@ function refreshRegistrationState() {
   const configError = document.querySelector("#registration-config-error");
   const closed = document.querySelector("#registration-closed");
   const authRequired = document.querySelector("#registration-auth-required");
+  const alreadyRegistered = document.querySelector("#registration-already-registered");
   setup.hidden = true;
   configError.hidden = true;
   closed.hidden = true;
   authRequired.hidden = true;
+  alreadyRegistered.hidden = true;
   teamForm.hidden = true;
   paymentForm.hidden = true;
 
@@ -354,6 +411,25 @@ function refreshRegistrationState() {
     setup.hidden = false;
     setup.querySelector("strong").textContent = "Checking sign-in…";
     setup.querySelector("p").textContent = "Please wait while we restore your account.";
+    return;
+  }
+
+  if (participantUser && participantTeamStatus === "checking") {
+    setup.hidden = false;
+    setup.querySelector("strong").textContent = "Checking your registration…";
+    setup.querySelector("p").textContent = "Please wait while we look up your account.";
+    return;
+  }
+
+  if (participantUser && participantTeamStatus === "error") {
+    configError.hidden = false;
+    document.querySelector("#registration-config-message").textContent =
+      "We could not confirm whether your account is already registered. Reload before trying again.";
+    return;
+  }
+
+  if (participantUser && participantTeamStatus === "registered") {
+    alreadyRegistered.hidden = false;
     return;
   }
 
@@ -393,7 +469,7 @@ function refreshRegistrationState() {
       }
 
       const isOpen = data.registration_open;
-      closed.hidden = isOpen;
+      closed.hidden = isOpen || participantTeamStatus === "registered";
       authRequired.hidden = !isOpen || Boolean(participantUser);
       teamForm.hidden = !isOpen || !participantUser || Boolean(draftTeam) || !successPanel.hidden;
       paymentForm.hidden = !isOpen || !participantUser || !draftTeam || !successPanel.hidden;
@@ -515,7 +591,8 @@ document.querySelector("#participant-google-sign-in").addEventListener("click", 
   button.disabled = true;
   button.textContent = "Opening Google…";
   try {
-    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const redirectTo =
+      `${window.location.origin}${window.location.pathname}${window.location.search}`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo },
@@ -721,6 +798,7 @@ paymentForm.addEventListener("submit", async (event) => {
     selectedScreenshot = null;
     paymentForm.hidden = true;
     successPanel.hidden = false;
+    if (participantUser) void loadParticipantTeam(participantUser.id);
     successPanel.scrollIntoView({ behavior: "smooth", block: "center" });
   } catch (error) {
     console.error("Unexpected error while submitting IdeaForge payment details.", error);
@@ -763,7 +841,7 @@ function setAdminPage(pageName) {
     overview: ["Dashboard overview", "Here’s what’s happening with your hackathon today."],
     payments: ["Payments", "Review registration details, payment references, and proofs."],
     users: ["Registered users", "Find participants and see their team and payment status."],
-    checkin: ["Team check-in", "Scan a team QR code or enter its code to record attendance."],
+    checkin: ["Team check-in", "Display a temporary check-in QR or search for a team manually."],
     emails: ["Gmail outbox", "Review queued confirmations and retry eligible failures."],
   };
   for (const page of document.querySelectorAll(".admin-page")) {
@@ -778,7 +856,6 @@ function setAdminPage(pageName) {
   document.querySelector("#admin-page-description").textContent = description;
   document.querySelector("#admin-sidebar").classList.remove("open");
   document.querySelector("#admin-menu-toggle").setAttribute("aria-expanded", "false");
-  if (pageName !== "checkin") stopCheckinScanner();
 }
 
 async function renderAdmin() {
@@ -875,6 +952,8 @@ async function loadAdminDashboard() {
   }
 
   const teams = teamsResult.data ?? [];
+  adminTeamsData = teams;
+  renderAdminCheckinSearch();
   const emailByTeam = new Map(
     (emailResult.data ?? []).map((row) => [row.team_id, row]),
   );
@@ -1131,7 +1210,7 @@ document.querySelector("#admin-google-sign-in").addEventListener("click", async 
 });
 
 document.querySelector("#admin-sign-out").addEventListener("click", async () => {
-  stopCheckinScanner();
+  stopParticipantCheckinScanner();
   const { error } = await supabase.auth.signOut();
   if (error) {
     console.error("Could not sign out IdeaForge admin.", error);
@@ -1359,88 +1438,214 @@ document.querySelector("#refresh-email-outbox").addEventListener("click", async 
   }
 });
 
-let checkinScannerControls = null;
-
-function stopCheckinScanner() {
-  if (checkinScannerControls) {
-    checkinScannerControls.stop();
-    checkinScannerControls = null;
+function stopParticipantCheckinScanner() {
+  if (participantCheckinScannerControls) {
+    participantCheckinScannerControls.stop();
+    participantCheckinScannerControls = null;
   }
-  document.querySelector("#start-checkin-scanner").disabled = false;
-  document.querySelector("#stop-checkin-scanner").disabled = true;
+  const video = document.querySelector("#participant-checkin-video");
+  if (video) video.hidden = true;
+  const startButton = document.querySelector("#start-participant-checkin-scanner");
+  const stopButton = document.querySelector("#stop-participant-checkin-scanner");
+  if (startButton) startButton.disabled = false;
+  if (stopButton) stopButton.disabled = true;
 }
 
-document.querySelector("#stop-checkin-scanner").addEventListener("click", stopCheckinScanner);
+document.querySelector("#stop-participant-checkin-scanner").addEventListener(
+  "click",
+  stopParticipantCheckinScanner,
+);
 
-document.querySelector("#start-checkin-scanner").addEventListener("click", async (event) => {
-  if (!activeAdmin) {
-    showToast("Sign in with an approved admin account first.", true);
+document.querySelector("#start-participant-checkin-scanner").addEventListener("click", async (event) => {
+  if (!participantUser || !activeParticipantTeam) {
+    showToast("Sign in with the Google account registered on your team first.");
     return;
   }
 
   const startButton = event.currentTarget;
-  const message = document.querySelector("#checkin-scanner-message");
+  const stopButton = document.querySelector("#stop-participant-checkin-scanner");
+  const message = document.querySelector("#participant-checkin-message");
+  const video = document.querySelector("#participant-checkin-video");
   startButton.disabled = true;
+  video.hidden = false;
   message.textContent = "Starting camera…";
   try {
     const { BrowserQRCodeReader } = await import("@zxing/browser");
     const reader = new BrowserQRCodeReader();
-    checkinScannerControls = await reader.decodeFromVideoDevice(
+    participantCheckinScannerControls = await reader.decodeFromVideoDevice(
       undefined,
-      document.querySelector("#checkin-video"),
-      (result) => {
+      video,
+      async (result) => {
         if (!result) return;
-        stopCheckinScanner();
-        const form = document.querySelector("#checkin-form");
-        form.elements.teamCode.value = result.getText();
-        form.requestSubmit();
+        const match = /^IDEAFORGE-CHECKIN:([0-9a-f-]{36})$/i.exec(result.getText().trim());
+        stopParticipantCheckinScanner();
+        if (!match) {
+          message.textContent = "That is not a valid IdeaForge check-in QR. Scan the current QR shown by an admin.";
+          return;
+        }
+
+        message.textContent = "Checking in your team…";
+        const { data, error } = await supabase.rpc("ideaforge_check_in_my_team", {
+          p_token: match[1],
+        });
+        if (error) {
+          console.error("Could not check in the participant's IdeaForge team.", error);
+          message.textContent = error.message || "Could not check in your team. Ask an admin for help.";
+          return;
+        }
+
+        message.textContent = data.already_checked_in
+          ? `Your team was already checked in at ${new Date(data.checked_in_at).toLocaleString()}.`
+          : `Your team was checked in successfully · ${data.attendee_count} participants.`;
+        await loadParticipantTeam(participantUser.id);
       },
     );
-    document.querySelector("#stop-checkin-scanner").disabled = false;
-    message.textContent = "Point the camera at the team QR code.";
+    stopButton.disabled = false;
+    message.textContent = "Point your camera at the active check-in QR displayed by an admin.";
   } catch (error) {
-    console.error("Could not start the IdeaForge QR scanner.", error);
+    console.error("Could not start the participant check-in scanner.", error);
     message.textContent = error instanceof Error
       ? `Could not start camera: ${error.message}`
       : "Could not start camera. Check permissions and try again.";
-    startButton.disabled = false;
+    stopParticipantCheckinScanner();
   }
 });
 
-document.querySelector("#checkin-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
+function renderAdminCheckinSearch() {
+  const search = document.querySelector("#checkin-search");
+  const results = document.querySelector("#checkin-search-results");
+  if (!search || !results) return;
+  const query = search.value.trim().toLowerCase();
+  results.replaceChildren();
+
+  if (!query) {
+    const hint = document.createElement("p");
+    hint.className = "prototype-note";
+    hint.textContent = "Search by team name, team code, participant name, or email.";
+    results.append(hint);
+    return;
+  }
+
+  const matches = adminTeamsData.filter((team) => {
+    const members = team.ideaforge_members ?? [];
+    const searchable = [
+      team.team_name,
+      team.team_code,
+      ...members.flatMap((member) => [
+        member.full_name,
+        member.email,
+        member.mobile_number,
+        member.college_name,
+      ]),
+    ].join(" ").toLowerCase();
+    return searchable.includes(query);
+  }).slice(0, 20);
+
+  if (matches.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "prototype-note";
+    empty.textContent = "No matching team. Try a different name, email, or code.";
+    results.append(empty);
+    return;
+  }
+
+  for (const team of matches) {
+    const item = document.createElement("article");
+    item.className = "checkin-search-result";
+    const details = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = team.team_name;
+    const contact = (team.ideaforge_members ?? []).find((member) => member.is_team_contact);
+    const info = document.createElement("span");
+    info.textContent = `${team.team_code} · ${contact?.full_name ?? "Team"} · ${contact?.email ?? ""}`;
+    details.append(name, info);
+    const button = document.createElement("button");
+    button.className = "small-button approve";
+    button.type = "button";
+    button.dataset.checkinCode = team.team_code;
+    if (team.checked_in_at) {
+      button.textContent = `Checked in · ${new Date(team.checked_in_at).toLocaleString()}`;
+      button.disabled = true;
+    } else {
+      button.textContent = "Check in team";
+    }
+    item.append(details, button);
+    results.append(item);
+  }
+}
+
+document.querySelector("#checkin-search").addEventListener("input", renderAdminCheckinSearch);
+document.querySelector("#checkin-search-results").addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-checkin-code]");
+  if (!button) return;
   if (!activeAdmin) {
     showToast("Sign in with an approved admin account first.", true);
     return;
   }
 
-  const form = event.currentTarget;
-  const submitButton = form.querySelector('button[type="submit"]');
-  const code = String(new FormData(form).get("teamCode")).trim();
   const result = document.querySelector("#checkin-result");
-  submitButton.disabled = true;
+  button.disabled = true;
   result.hidden = false;
-  result.textContent = "Checking team code…";
+  result.textContent = "Checking in team…";
   try {
     const { data, error } = await supabase.rpc("ideaforge_check_in_team", {
-      p_team_code: code,
+      p_team_code: button.dataset.checkinCode,
     });
     if (error) {
       console.error("Could not check in IdeaForge team.", error);
       result.textContent = error.message || "Could not check in this team.";
+      button.disabled = false;
       return;
     }
-
     result.textContent = data.already_checked_in
       ? `${data.team_name} was already checked in at ${new Date(data.checked_in_at).toLocaleString()}.`
       : `${data.team_name} checked in successfully · ${data.attendee_count} participant${data.attendee_count === 1 ? "" : "s"}.`;
     await loadAdminDashboard();
-    form.elements.teamCode.value = "";
   } catch (error) {
     console.error("Unexpected error checking in IdeaForge team.", error);
     result.textContent = "Check-in failed because of a network error. Please try again.";
+    button.disabled = false;
+  }
+});
+
+document.querySelector("#create-checkin-qr").addEventListener("click", async (event) => {
+  if (!activeAdmin) {
+    showToast("Sign in with an approved admin account first.", true);
+    return;
+  }
+
+  const button = event.currentTarget;
+  const canvas = document.querySelector("#admin-checkin-qr");
+  const message = document.querySelector("#admin-checkin-qr-message");
+  button.disabled = true;
+  message.textContent = "Creating a secure check-in QR…";
+  canvas.hidden = true;
+  try {
+    const { data, error } = await supabase.rpc("ideaforge_create_checkin_session");
+    if (error) {
+      console.error("Could not create an IdeaForge check-in session.", error);
+      message.textContent = error.message || "Could not create the check-in QR. Please try again.";
+      return;
+    }
+    if (!data?.token || !data?.expires_at) {
+      throw new Error("The check-in session response is incomplete.");
+    }
+
+    await QRCode.toCanvas(canvas, `IDEAFORGE-CHECKIN:${data.token}`, {
+      width: 280,
+      margin: 2,
+      color: { dark: "#090909", light: "#ffffff" },
+    });
+    canvas.hidden = false;
+    message.textContent = `Participants can scan this QR until ${new Date(data.expires_at).toLocaleTimeString()}.`;
+    button.textContent = "Refresh check-in QR";
+  } catch (error) {
+    console.error("Could not display the IdeaForge check-in QR.", error);
+    message.textContent = error instanceof Error
+      ? `Could not display QR: ${error.message}`
+      : "Could not display the check-in QR. Please try again.";
   } finally {
-    submitButton.disabled = false;
+    button.disabled = false;
   }
 });
 
@@ -1459,7 +1664,7 @@ function renderRoute() {
     return;
   }
 
-  stopCheckinScanner();
+  stopParticipantCheckinScanner();
   const isProfile = window.location.hash === "#profile";
   profilePage.hidden = !isProfile;
   if (isProfile && participantUser) {
@@ -1475,6 +1680,7 @@ window.addEventListener("popstate", renderRoute);
 window.addEventListener("hashchange", renderRoute);
 
 renderMembers();
+updateRegistrationLinks();
 renderRoute();
 
 if ("IntersectionObserver" in window) {
