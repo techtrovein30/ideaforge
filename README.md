@@ -103,7 +103,9 @@ The Edge Function in `supabase/functions/ideaforge-email-worker/` sends using
 the Gmail API and is disabled unless the server-side
 `IDEAFORGE_EMAIL_SENDING_ENABLED` secret is explicitly set to `true`. Before
 deployment, configure Gmail API OAuth credentials and the sender identity as
-Supabase Edge Function secrets; required names are `GMAIL_CLIENT_ID`,
+Supabase Edge Function secrets. Email activation is approved, but the
+credentials, function deployment, Vault secrets, and scheduler still need to
+be configured in Supabase. Required secret names are `GMAIL_CLIENT_ID`,
 `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `IDEAFORGE_GMAIL_FROM`,
 `IDEAFORGE_GMAIL_FROM_NAME`, `IDEAFORGE_EMAIL_WORKER_TOKEN`, and
 `IDEAFORGE_EMAIL_SENDING_ENABLED`. The Supabase service-role key is never
@@ -116,14 +118,15 @@ OAuth should remain unchanged.
 
 [`supabase/scheduler.sql`](./supabase/scheduler.sql) is a proposed pg_cron /
 pg_net / Vault setup, not an applied configuration. Verify those extensions
-and existing jobs in the target project before running it. Configure the
+and existing jobs in the target project before running it. Review eligible
+pending outbox rows first; enabling the worker will send queued confirmations.
+Configure the
 `ideaforge_supabase_url` and `ideaforge_email_worker_token` Vault entries
 first. The scheduler runs every five minutes; the database enforces a
 concurrency-safe 200-message rolling 24-hour cap.
 
 The worker records Gmail API acceptance, which is not proof of inbox delivery.
-Email sending, deployment, scheduler setup, and migrations remain pending
-explicit approval. The Gmail outbox page can show and retry eligible failures,
-but queued messages are sent only when the Edge Function and scheduler are
-deployed and enabled. For sender/OAuth setup requirements, see
+The Gmail outbox page can show and retry eligible failures, but queued messages
+are sent only when the Edge Function and scheduler are deployed and enabled.
+For the remaining activation steps and sender/OAuth setup requirements, see
 [URLs needed](./URLs%20needed.md).
