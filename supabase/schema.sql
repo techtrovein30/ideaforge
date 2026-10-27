@@ -127,6 +127,7 @@ as $$
 declare
   v_team_id uuid;
   v_member_count integer;
+  v_constraint_name text;
   v_authenticated_email text := lower(btrim(coalesce(auth.jwt() ->> 'email', '')));
 begin
   if auth.uid() is null or v_authenticated_email = '' then
@@ -179,26 +180,46 @@ begin
     raise exception 'Each team member must use a different email address';
   end if;
 
+  if exists (
+    select 1
+    from jsonb_array_elements(p_members) as m(value)
+    join public.ideaforge_members registered
+      on lower(registered.email) = lower(btrim(m.value ->> 'email'))
+  ) then
+    raise exception 'One or more email addresses are already registered on a team. If this is your own account, open My profile; otherwise verify the address or contact the organizers.'
+      using errcode = '23505';
+  end if;
+
   insert into public.ideaforge_teams (team_name)
   values (btrim(p_team_name))
   returning id into v_team_id;
 
-  insert into public.ideaforge_members (
-    team_id,
-    full_name,
-    college_name,
-    mobile_number,
-    email,
-    is_team_contact
-  )
-  select
-    v_team_id,
-    btrim(m.value ->> 'full_name'),
-    btrim(m.value ->> 'college_name'),
-    btrim(m.value ->> 'mobile_number'),
-    lower(btrim(m.value ->> 'email')),
-    m.ordinality = 1
-  from jsonb_array_elements(p_members) with ordinality as m(value, ordinality);
+  begin
+    insert into public.ideaforge_members (
+      team_id,
+      full_name,
+      college_name,
+      mobile_number,
+      email,
+      is_team_contact
+    )
+    select
+      v_team_id,
+      btrim(m.value ->> 'full_name'),
+      btrim(m.value ->> 'college_name'),
+      btrim(m.value ->> 'mobile_number'),
+      lower(btrim(m.value ->> 'email')),
+      m.ordinality = 1
+    from jsonb_array_elements(p_members) with ordinality as m(value, ordinality);
+  exception
+    when unique_violation then
+      get stacked diagnostics v_constraint_name = constraint_name;
+      if v_constraint_name = 'ideaforge_members_email_unique' then
+        raise exception 'One or more email addresses are already registered on a team. If this is your own account, open My profile; otherwise verify the address or contact the organizers.'
+          using errcode = '23505';
+      end if;
+      raise;
+  end;
 
   return v_team_id;
 end;

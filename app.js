@@ -712,7 +712,16 @@ teamForm.addEventListener("submit", async (event) => {
 
     if (error) {
       console.error("IdeaForge team registration failed.", error);
-      showToast(error.message || "Could not save your team. Please try again.");
+      const duplicateEmail =
+        error.code === "23505" &&
+        [error.message, error.details, error.hint].some((value) =>
+          value?.includes("ideaforge_members_email_unique"),
+        );
+      showToast(
+        duplicateEmail
+          ? "This team includes an email already registered for the hackathon. If it is your account, view your profile; otherwise use a different email for that member."
+          : error.message || "Could not save your team. Please try again.",
+      );
       return;
     }
 
