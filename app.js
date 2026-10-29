@@ -1184,6 +1184,9 @@ function setAdminPage(pageName) {
     paymentFilter.value = pageName === "reuploads" ? "rejected" : "all";
     filterAdminPayments();
   }
+  if (sectionName === "deleted-history") {
+    void loadAdminDeletedHistory();
+  }
   document.querySelector("#admin-sidebar").classList.remove("open");
   document.querySelector("#admin-menu-toggle").setAttribute("aria-expanded", "false");
 }
@@ -1297,6 +1300,23 @@ async function loadAdminCheckinToggle() {
     : "Participant check-in scanning is hidden from profiles.";
 }
 
+async function fetchAllAdminTeams() {
+  const pageSize = 500;
+  const teams = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("ideaforge_teams")
+      .select("id, team_name, team_code, registration_type, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, register_number, is_team_contact)")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    teams.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+  return { data: teams, error: null };
+}
+
 async function loadAdminDashboard() {
   if (!activeAdmin) return;
 
@@ -1306,10 +1326,7 @@ async function loadAdminDashboard() {
       .select("registration_open")
       .eq("id", true)
       .single(),
-    supabase
-      .from("ideaforge_teams")
-      .select("id, team_name, team_code, registration_type, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, register_number, is_team_contact)")
-      .order("created_at", { ascending: false }),
+    fetchAllAdminTeams(),
   ]);
 
   if (settingsResult.error) {
@@ -1326,19 +1343,21 @@ async function loadAdminDashboard() {
   const registeredTeams = teams.filter((team) => team.payment_status !== "awaiting_payment");
   adminTeamsData = registeredTeams;
   renderAdminCheckinSearch();
-  const membersCount = registeredTeams.reduce(
+  const membersCount = teams.reduce(
     (total, team) => total + (team.ideaforge_members?.length ?? 0),
     0,
   );
-  document.querySelector("#total-teams").textContent = String(registeredTeams.length);
+  document.querySelector("#total-teams").textContent = String(teams.length);
   document.querySelector("#total-members").textContent = String(membersCount);
   document.querySelector("#pending-payments").textContent =
     String(teams.filter((team) => team.payment_status === "pending_review").length);
   document.querySelector("#approved-payments").textContent =
     String(teams.filter((team) => team.payment_status === "approved").length);
   document.querySelector("#checked-in-teams").textContent =
-    String(registeredTeams.filter((team) => team.checked_in_at).length);
-  renderAdminUsers(registeredTeams);
+    String(teams.filter((team) => team.checked_in_at).length);
+  // Show every team in the participant directory, including registrations that
+  // never reached payment, so abandoned rows can be reviewed or deleted.
+  renderAdminUsers(teams);
   if (isEmailQueueRoute()) {
     const { data: emailRows, error: emailError } = await supabase
       .from("ideaforge_email_outbox")
@@ -1358,34 +1377,21 @@ async function loadAdminDashboard() {
 
   const list = document.querySelector("#admin-team-list");
   list.replaceChildren();
-  const paymentTeams = registeredTeams.filter(
-    (team) => team.registration_type !== "internal" && team.payment_status !== "not_required"
-  );
+  const paymentTeams = teams;
   document.querySelector("#admin-payment-count").textContent =
-    `${paymentTeams.length} payment submission${paymentTeams.length === 1 ? "" : "s"}`;
+    `${paymentTeams.length} registration${paymentTeams.length === 1 ? "" : "s"}`;
 
   for (const team of paymentTeams) {
     const members = team.ideaforge_members ?? [];
     const statusLabels = {
-      awaiting_payment: "AWAITING PAYMENT",
+      awaiting_payment: "INCOMPLETE · NO PAYMENT",
       pending_review: "PENDING",
       approved: "PAID",
       rejected: "RE-UPLOAD REQUESTED",
       not_required: "FREE · INTERNAL",
     };
     const isPending = team.payment_status === "pending_review";
-    let screenshotUrl = null;
-
-    if (team.screenshot_path) {
-      const { data, error } = await supabase.storage
-        .from(PAYMENT_BUCKET)
-        .createSignedUrl(team.screenshot_path, 300);
-      if (error) {
-        console.error(`Could not open screenshot for team ${team.id}.`, error);
-      } else {
-        screenshotUrl = data.signedUrl;
-      }
-    }
+    const screenshotPath = team.screenshot_path ?? "";
 
     const membersHtml = members.map((member) => `
       <div class="admin-member-row">
@@ -1395,12 +1401,14 @@ async function loadAdminDashboard() {
     const teamContact = members.find((member) => member.is_team_contact) ?? members[0];
     const paymentHtml = team.payment_status === "not_required"
       ? '<span class="prototype-note">Free · No payment required</span>'
-      : team.payment_utr
-      ? `<span class="utr-value">${escapeHtml(team.payment_utr)}</span>
-         ${screenshotUrl
-           ? `<button class="payment-proof-link" type="button" data-payment-proof data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}" data-team-code="${escapeHtml(team.team_code)}" data-contact-name="${escapeHtml(teamContact?.full_name ?? "—")}" data-utr="${escapeHtml(team.payment_utr)}" data-submitted-at="${escapeHtml(team.payment_submitted_at ?? "")}" data-screenshot-url="${escapeHtml(screenshotUrl)}">▧ View screenshot</button>`
+      : team.payment_status === "awaiting_payment"
+        ? '<span class="prototype-note">Registration incomplete — no payment proof submitted</span>'
+        : team.payment_utr
+          ? `<span class="utr-value">${escapeHtml(team.payment_utr)}</span>
+         ${screenshotPath
+           ? `<button class="payment-proof-link" type="button" data-payment-proof data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}" data-team-code="${escapeHtml(team.team_code ?? "")}" data-contact-name="${escapeHtml(teamContact?.full_name ?? "—")}" data-utr="${escapeHtml(team.payment_utr)}" data-submitted-at="${escapeHtml(team.payment_submitted_at ?? "")}" data-screenshot-path="${escapeHtml(screenshotPath)}">▧ View screenshot</button>`
            : `<span class="prototype-note">Screenshot unavailable</span>`}`
-      : "<span class=\"prototype-note\">UTR unavailable</span>";
+          : "<span class=\"prototype-note\">UTR unavailable</span>";
     const card = document.createElement("article");
     card.className = "admin-team-card";
     card.dataset.paymentStatus = team.payment_status;
@@ -1413,6 +1421,7 @@ async function loadAdminDashboard() {
         <div class="payment-date-cell">${team.payment_submitted_at ? new Date(team.payment_submitted_at).toLocaleString() : "—"}</div>
         <div class="admin-payment-actions">
           ${isPending ? `<button class="small-button approve" type="button" data-action="approve" data-team-id="${escapeHtml(team.id)}">✓ Mark paid</button><button class="small-button request-reupload" type="button" data-action="request-reupload" data-team-id="${escapeHtml(team.id)}">↻ Request re-upload</button>` : team.payment_status === "approved" ? '<span class="payment-action-complete">✓ Payment verified</span>' : team.payment_status === "not_required" ? '<span class="payment-action-complete">✓ No payment required</span>' : ""}
+          <button class="small-button danger" type="button" data-action="delete-team" data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}">🗑 Delete</button>
         </div>
         <details class="admin-payment-details">
           <summary>Team details</summary>
@@ -1437,7 +1446,8 @@ function renderAdminUsers(teams) {
 
   list.innerHTML = teams.map((team) => {
     const members = team.ideaforge_members ?? [];
-    const teamSearch = `${team.team_name} ${team.team_code} ${team.registration_type} ${team.payment_status}`.toLowerCase();
+    const teamCodeLabel = team.team_code || "Code issued after payment";
+    const teamSearch = `${team.team_name} ${team.team_code ?? ""} ${team.registration_type} ${team.payment_status}`.toLowerCase();
     const memberRows = members.map((member) => {
       const searchText = [
         member.full_name,
@@ -1455,15 +1465,21 @@ function renderAdminUsers(teams) {
       </article>`;
     }).join("");
     const paymentStatus = team.payment_status ?? "unknown";
-    return `<section class="admin-user-team" data-team-search="${escapeHtml(teamSearch)}">
+    const statusLabel = paymentStatus === "not_required"
+      ? "free · internal"
+      : paymentStatus === "awaiting_payment"
+        ? "awaiting payment"
+        : paymentStatus.replaceAll("_", " ");
+    return `<section class="admin-user-team" data-team-search="${escapeHtml(teamSearch)}" data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}">
       <header class="admin-user-team-heading">
         <div class="admin-user-team-title">
           <span class="admin-user-team-icon" aria-hidden="true">✳</span>
-          <div><h3>${escapeHtml(team.team_name)}</h3><span>${escapeHtml(team.team_code)}</span></div>
+          <div><h3>${escapeHtml(team.team_name)}</h3><span>${escapeHtml(teamCodeLabel)}</span></div>
         </div>
         <div class="admin-user-team-meta">
           <span class="admin-user-team-size">${members.length} member${members.length === 1 ? "" : "s"}</span>
-          <span class="status-pill ${paymentStatus === "approved" || paymentStatus === "not_required" ? "approved" : paymentStatus === "rejected" ? "reupload-requested" : ""}">${escapeHtml(paymentStatus === "not_required" ? "free · internal" : paymentStatus.replaceAll("_", " "))}</span>
+          <span class="status-pill ${paymentStatus === "approved" || paymentStatus === "not_required" ? "approved" : paymentStatus === "rejected" ? "reupload-requested" : ""}">${escapeHtml(statusLabel)}</span>
+          <button class="small-button danger" type="button" data-action="delete-team" data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}">🗑 Delete</button>
         </div>
       </header>
       <div class="admin-user-team-members">${memberRows || '<p class="admin-user-no-members">No participant details available.</p>'}</div>
@@ -1492,6 +1508,85 @@ function filterAdminUsers(value) {
     if (!team.hidden) visibleTeams += 1;
   }
   document.querySelector("#admin-users-empty").hidden = visibleTeams > 0;
+}
+
+async function loadAdminDeletedHistory() {
+  const list = document.querySelector("#admin-deleted-list");
+  const empty = document.querySelector("#admin-deleted-empty");
+  const count = document.querySelector("#admin-deleted-count");
+  if (!list || !empty || !count) return;
+
+  count.textContent = "Loading…";
+  list.replaceChildren();
+  empty.hidden = true;
+
+  const { data, error } = await supabase
+    .from("ideaforge_deleted_teams")
+    .select("id, team_id, team_code, team_name, registration_type, payment_status, payment_utr, members, checked_in_at, team_created_at, deleted_at, deleted_by_email, note, screenshot_paths")
+    .order("deleted_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    console.error("Could not load deleted IdeaForge registrations.", error);
+    count.textContent = "Unavailable";
+    empty.hidden = false;
+    document.querySelector("#admin-deleted-empty strong").textContent = "Could not load deleted history";
+    document.querySelector("#admin-deleted-empty p").textContent =
+      "Apply the delete-team migration and confirm admin permissions.";
+    return;
+  }
+
+  const records = data ?? [];
+  count.textContent = `${records.length} deleted registration${records.length === 1 ? "" : "s"}`;
+  document.querySelector("#admin-deleted-empty strong").textContent = "No deleted registrations";
+  document.querySelector("#admin-deleted-empty p").textContent =
+    "Teams deleted from the admin console are archived here with their roster and payment details.";
+
+  if (records.length === 0) {
+    empty.hidden = false;
+    return;
+  }
+
+  list.innerHTML = records.map((record) => {
+    const members = Array.isArray(record.members) ? record.members : [];
+    const memberRows = members.map((member) => `
+      <li>
+        <strong>${escapeHtml(member.full_name ?? "Unknown participant")}</strong>
+        <span>${escapeHtml(member.college_name ?? "—")} · ${escapeHtml(member.mobile_number ?? "—")}${member.register_number ? ` · Reg. ${escapeHtml(member.register_number)}` : ""}${member.is_team_contact ? " · Team contact" : ""}</span>
+      </li>`).join("");
+    const deletedAt = record.deleted_at
+      ? new Date(record.deleted_at).toLocaleString()
+      : "—";
+    const checkedIn = record.checked_in_at
+      ? new Date(record.checked_in_at).toLocaleString()
+      : "Not checked in";
+    const proofCount = Array.isArray(record.screenshot_paths)
+      ? record.screenshot_paths.length
+      : 0;
+    return `<article class="admin-deleted-card">
+      <header>
+        <div class="admin-deleted-title">
+          <strong>${escapeHtml(record.team_name)}</strong>
+          <span>${escapeHtml(record.team_code ?? "No code")} · ${record.registration_type === "internal" ? "Internal" : "External"} · ${members.length} member${members.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="admin-deleted-stamp">
+          <span>Deleted ${escapeHtml(deletedAt)}</span>
+          <span>By ${escapeHtml(record.deleted_by_email ?? "administrator")}</span>
+        </div>
+      </header>
+      <div class="admin-deleted-facts">
+        <span>Payment: <b>${escapeHtml(String(record.payment_status ?? "unknown").replaceAll("_", " "))}</b></span>
+        <span>UTR: <b>${escapeHtml(record.payment_utr ?? "—")}</b></span>
+        <span>Attendance: <b>${escapeHtml(checkedIn)}</b></span>
+        <span>Proof files: <b>${proofCount}</b></span>
+      </div>
+      <details>
+        <summary>Archived roster</summary>
+        <ul>${memberRows || "<li><span>No member snapshot was recorded.</span></li>"}</ul>
+      </details>
+      ${record.note ? `<p class="admin-deleted-note">${escapeHtml(record.note)}</p>` : ""}
+    </article>`;
+  }).join("");
 }
 
 function renderAdminEmails(emails, teams) {
@@ -1662,15 +1757,70 @@ document.querySelector("#toggle-registration").addEventListener("click", async (
   }
 });
 
+async function deleteAdminTeam(button) {
+  if (!activeAdmin) {
+    showToast("Sign in with an approved admin account first.", true);
+    return;
+  }
+  const teamId = button.dataset.teamId;
+  const teamName = button.dataset.teamName || "this team";
+  if (!teamId) return;
+
+  const confirmed = window.confirm(
+    `Delete ${teamName}?\n\nThis permanently removes the registration, roster, payment UTR/review history, confirmation email records, and stored payment screenshots from Supabase.\n\nThis cannot be undone.`,
+  );
+  if (!confirmed) return;
+
+  button.disabled = true;
+  try {
+    const { data, error } = await supabase.rpc("ideaforge_delete_team", {
+      p_team_id: teamId,
+      p_note: null,
+    });
+    if (error) {
+      console.error("Could not delete the IdeaForge registration.", error);
+      showToast(error.message || "Could not delete this registration.", true);
+      button.disabled = false;
+      return;
+    }
+
+    const paths = Array.isArray(data?.screenshot_paths) ? data.screenshot_paths : [];
+    let proofWarning = "";
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from(PAYMENT_BUCKET)
+        .remove(paths);
+      if (storageError) {
+        console.error("Could not remove the deleted team's payment proof files.", storageError);
+        proofWarning = " The registration was deleted, but its screenshot files could not be removed from Storage.";
+      }
+    }
+
+    await loadAdminDashboard();
+    if (!document.querySelector("#admin-deleted-history-page").hidden) {
+      await loadAdminDeletedHistory();
+    }
+    showToast(`${teamName} was deleted from Supabase.${proofWarning}`, true);
+  } catch (error) {
+    console.error("Unexpected error deleting an IdeaForge registration.", error);
+    showToast("Could not delete the registration because of a network error. Please try again.", true);
+    button.disabled = false;
+  }
+}
+
 document.querySelector("#admin-team-list").addEventListener("click", async (event) => {
   const proofButton = event.target.closest("button[data-payment-proof]");
   if (proofButton) {
-    openPaymentProof(proofButton);
+    void openPaymentProof(proofButton);
     return;
   }
 
   const button = event.target.closest("button[data-action]");
   if (!button || !activeAdmin) return;
+  if (button.dataset.action === "delete-team") {
+    await deleteAdminTeam(button);
+    return;
+  }
   if (button.dataset.action === "retry-email") {
     await retryAdminEmail(button);
     return;
@@ -1710,7 +1860,12 @@ document.querySelector("#admin-team-list").addEventListener("click", async (even
   showToast("Payment marked as paid.", true);
 });
 
-function openPaymentProof(button) {
+document.querySelector("#admin-user-list").addEventListener("click", async (event) => {
+  const button = event.target.closest('button[data-action="delete-team"]');
+  if (button && activeAdmin) await deleteAdminTeam(button);
+});
+
+async function openPaymentProof(button) {
   const dialog = document.querySelector("#payment-proof-dialog");
   const image = document.querySelector("#payment-proof-image");
   const submittedAt = button.dataset.submittedAt
@@ -1725,7 +1880,7 @@ function openPaymentProof(button) {
     `Registration ${button.dataset.teamCode} · ${button.dataset.teamName}`;
   document.querySelector("#payment-proof-utr").textContent = button.dataset.utr;
   document.querySelector("#payment-proof-created-at").textContent = submittedAt;
-  image.src = button.dataset.screenshotUrl;
+  image.removeAttribute("src");
   image.alt = `Payment proof for ${button.dataset.teamName}`;
   approveButton.dataset.teamId = button.dataset.teamId;
   reuploadButton.dataset.teamId = button.dataset.teamId;
@@ -1735,7 +1890,24 @@ function openPaymentProof(button) {
     button.closest(".admin-team-card")?.dataset.paymentStatus === "pending_review";
   approveButton.hidden = !isPending;
   reuploadButton.hidden = !isPending;
+
+  const screenshotPath = button.dataset.screenshotPath;
+  if (!screenshotPath) {
+    showToast("This team has no payment proof stored.", true);
+    return;
+  }
+
   dialog.showModal();
+  const { data, error } = await supabase.storage
+    .from(PAYMENT_BUCKET)
+    .createSignedUrl(screenshotPath, 300);
+  if (error) {
+    console.error("Could not open the payment proof.", error);
+    dialog.close();
+    showToast(error.message || "Could not open the payment proof.", true);
+    return;
+  }
+  image.src = data.signedUrl;
 }
 
 const paymentProofDialog = document.querySelector("#payment-proof-dialog");

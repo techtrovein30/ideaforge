@@ -2412,6 +2412,59 @@ body { background: var(--bg); }
   font-size: 14px;
   line-height: 1.6;
 }
+.small-button.danger {
+  color: #ffc0b5;
+  background: #35211f;
+  border-color: #74443b;
+  white-space: nowrap;
+}
+.small-button.danger:hover {
+  color: #fff4f0;
+  background: #4a2925;
+  border-color: #b05b4c;
+}
+.admin-deleted-list { display: grid; gap: 14px; margin-top: 16px; }
+.admin-deleted-card {
+  padding: 18px 20px;
+  color: #e9e5e1;
+  background: #1b1c20;
+  border: 1px solid #34353a;
+  border-left: 3px solid #b4584b;
+  border-radius: 10px;
+}
+.admin-deleted-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.admin-deleted-title { display: grid; gap: 5px; min-width: 0; }
+.admin-deleted-title strong { color: #faf8f5; font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
+.admin-deleted-title span { color: #c7c1bd; font-size: 12px; font-weight: 700; letter-spacing: .06em; }
+.admin-deleted-stamp { display: grid; gap: 4px; text-align: right; }
+.admin-deleted-stamp span { color: #aaa5b0; font-size: 12px; white-space: nowrap; }
+.admin-deleted-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #34353a;
+}
+.admin-deleted-facts span { color: #bdb7b2; font-size: 13px; }
+.admin-deleted-facts b { color: #f0ece8; font-weight: 700; }
+.admin-deleted-card details { margin-top: 12px; }
+.admin-deleted-card summary { color: #efa297; cursor: pointer; font-size: 13px; font-weight: 700; }
+.admin-deleted-card ul { display: grid; gap: 8px; margin: 11px 0 0; padding: 0; list-style: none; }
+.admin-deleted-card li { display: grid; gap: 3px; padding: 10px 12px; background: #202125; border: 1px solid #38393e; border-radius: 7px; }
+.admin-deleted-card li strong { color: #f3efec; font-size: 14px; }
+.admin-deleted-card li span { color: #c5bfbb; font-size: 12px; }
+.admin-deleted-note { margin: 12px 0 0; padding: 10px 12px; color: #e8d7c8; background: #2b261e; border: 1px solid #695532; border-radius: 7px; font-size: 13px; }
+
+@media (max-width: 700px) {
+  .admin-deleted-card > header { flex-direction: column; }
+  .admin-deleted-stamp { text-align: left; }
+}
 
 @media (max-width: 900px) and (min-width: 601px) {
   .admin-payment-columns,

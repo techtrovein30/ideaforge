@@ -119,6 +119,13 @@ registrations. Internal teams must provide a unique register number for each
 member and receive a team code without submitting payment. External teams
 continue through the existing ₹99-per-member payment flow.
 
+Apply
+[`supabase/migrations/20261029120000_ideaforge_delete_team.sql`](./supabase/migrations/20261029120000_ideaforge_delete_team.sql)
+after the internal-free-registration migration to enable admin-only registration
+deletion. Deleting a team archives a snapshot for **Deleted History**, removes
+the team, members, payment reviews, and confirmation-email rows, and returns the
+private proof paths so the admin console can also remove the stored screenshots.
+
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)
 to require participant sign-in for team registration and match the team

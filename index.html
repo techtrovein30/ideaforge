@@ -405,8 +405,8 @@
           </nav>
           <section class="admin-page" id="admin-overview-page">
             <div class="stats-grid">
-              <article class="stat-card"><span>REGISTERED TEAMS</span><strong id="total-teams">0</strong><small>Payment details submitted</small></article>
-              <article class="stat-card"><span>PARTICIPANTS</span><strong id="total-members">0</strong><small>Across registered teams</small></article>
+              <article class="stat-card"><span>REGISTERED TEAMS</span><strong id="total-teams">0</strong><small>All teams in the database</small></article>
+              <article class="stat-card"><span>PARTICIPANTS</span><strong id="total-members">0</strong><small>Across all teams</small></article>
               <article class="stat-card stat-card-pending"><span>PENDING PAYMENTS</span><strong id="pending-payments">0</strong><small>Awaiting verification</small></article>
               <article class="stat-card stat-card-checked"><span>TEAMS CHECKED IN</span><strong id="checked-in-teams">0</strong><small>Event attendance</small></article>
               <article class="stat-card stat-card-approved"><span>PAYMENTS APPROVED</span><strong id="approved-payments">0</strong><small>Confirmed registrations</small></article>
@@ -425,7 +425,7 @@
             <div class="admin-toolbar">
               <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-payment-search" type="search" placeholder="Search team, code, contact, or UTR…" autocomplete="off" /></label>
               <select class="text-input admin-filter" id="admin-payment-filter" aria-label="Filter payments">
-                <option value="all">All submissions</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Re-upload requested</option>
+                <option value="all">All registrations</option><option value="awaiting_payment">Incomplete / no payment</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Re-upload requested</option><option value="not_required">Free · internal</option>
               </select>
             </div>
             <div class="admin-payment-table">
@@ -434,7 +434,7 @@
               </div>
               <div id="admin-team-list" class="admin-team-list"></div>
             </div>
-            <div class="empty-state" id="admin-empty"><span>✳</span><strong>No payment proofs found</strong><p>Only teams that have submitted a payment screenshot appear here. Adjust your search or filter.</p></div>
+            <div class="empty-state" id="admin-empty"><span>✳</span><strong>No registrations match this view</strong><p>Try a different status filter or search. Incomplete registrations appear under “Incomplete / no payment”.</p></div>
           </section>
           <section class="admin-page admin-registrations" id="admin-users-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div><span class="prototype-note" id="admin-user-count">0 participants</span></div>
@@ -515,11 +515,13 @@
             <p class="admin-helper-copy">After enabling the scanner, display a short-lived QR from the admin Check-in page. Disable the scanner here when check-in is over.</p>
           </section>
           <section class="admin-page admin-registrations" id="admin-deleted-history-page" hidden>
-            <div class="admin-table-heading"><div><p class="eyebrow">REGISTRATION HISTORY</p><h2>Deleted history</h2></div></div>
-            <div class="admin-history-notice">
-              <strong>Deleted history is not available</strong>
-              <p>Registrations are not currently archived when deleted, so there are no historical deletion records to display.</p>
+            <div class="admin-table-heading">
+              <div><p class="eyebrow">REGISTRATION HISTORY</p><h2>Deleted history</h2></div>
+              <span class="prototype-note" id="admin-deleted-count">0 deleted registrations</span>
             </div>
+            <p class="admin-helper-copy">Deleting a registration removes it from the live registration tables, participant profiles, payment queue, and private proof storage. An administrator-only snapshot is kept here for audit purposes.</p>
+            <div id="admin-deleted-list" class="admin-deleted-list"></div>
+            <div class="empty-state" id="admin-deleted-empty" hidden><span>✳</span><strong>No deleted registrations</strong><p>Teams deleted from the admin console are archived here with their roster and payment details.</p></div>
           </section>
         </div>
       </section>
