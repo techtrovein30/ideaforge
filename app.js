@@ -515,11 +515,31 @@ function showToast(message, isAdmin = false) {
   toastTimer = window.setTimeout(() => element.classList.remove("visible"), 4200);
 }
 
+function getRegistrationType() {
+  return document.querySelector('input[name="registrationType"]:checked')?.value ?? "";
+}
+
+function updateRegistrationTypeSelection() {
+  const registrationType = getRegistrationType();
+  for (const card of document.querySelectorAll("[data-registration-card]")) {
+    card.classList.toggle("selected", card.dataset.registrationCard === registrationType);
+  }
+  const note = document.querySelector("#registration-type-note");
+  if (!note) return;
+  note.classList.toggle("is-selected", Boolean(registrationType));
+  note.textContent = registrationType === "internal"
+    ? "SIMATS internal team: free entry. We'll ask for a college register number for every member."
+    : registrationType === "external"
+      ? "External team: ₹99 per member. Enter your own college name for every member."
+      : "Select one option above to continue.";
+}
+
 function renderMembers() {
   const previousValues = new Map(
     [...membersList.querySelectorAll("input")].map((input) => [input.id, input.value]),
   );
-  const isInternal = document.querySelector("#registration-type")?.value === "internal";
+  const registrationType = getRegistrationType();
+  const isInternal = registrationType === "internal";
   membersList.innerHTML = "";
   for (let index = 0; index < memberCount; index += 1) {
     const card = document.createElement("section");
@@ -555,9 +575,12 @@ function renderMembers() {
   document.querySelector("#remove-member").disabled = memberCount <= INITIAL_MEMBER_COUNT;
   const submitButton = document.querySelector("#team-form-submit");
   if (submitButton) {
-    submitButton.innerHTML = isInternal
-      ? "Complete free registration <span>↗</span>"
-      : "Continue to payment <span>→</span>";
+    submitButton.disabled = !registrationType;
+    submitButton.innerHTML = !registrationType
+      ? "Choose participant type to continue <span>↑</span>"
+      : isInternal
+        ? "Complete free registration <span>↗</span>"
+        : "Continue to payment <span>→</span>";
   }
   const stepIndicator = document.querySelector("#team-form-step");
   if (stepIndicator) {
@@ -700,7 +723,7 @@ function validateTeamFormFields() {
 
   const emailInputs = [...teamForm.querySelectorAll('input[name="memberEmail"]')];
   const normalizedEmails = emailInputs.map((input) => input.value.trim().toLowerCase());
-  const isInternal = document.querySelector("#registration-type")?.value === "internal";
+  const isInternal = getRegistrationType() === "internal";
   const registerInputs = isInternal ? [...teamForm.querySelectorAll('input[name="memberRegisterNumber"]')] : [];
   const normalizedRegisterNumbers = registerInputs.map((input) => input.value.trim().toLowerCase());
   for (let index = 0; index < memberCount; index += 1) {
@@ -767,10 +790,13 @@ teamForm.addEventListener("input", (event) => {
   if (event.target instanceof HTMLInputElement) validateTeamFormFields();
 });
 
-document.querySelector("#registration-type")?.addEventListener("change", () => {
-  renderMembers();
-  validateTeamFormFields();
-});
+for (const input of document.querySelectorAll('input[name="registrationType"]')) {
+  input.addEventListener("change", () => {
+    updateRegistrationTypeSelection();
+    renderMembers();
+    validateTeamFormFields();
+  });
+}
 
 function resetRegistrationForm() {
   teamForm.reset();
@@ -781,6 +807,7 @@ function resetRegistrationForm() {
   }
   selectedScreenshot = null;
   memberCount = INITIAL_MEMBER_COUNT;
+  updateRegistrationTypeSelection();
   renderMembers();
   document.querySelector("#screenshot-preview").hidden = true;
   document.querySelector("#screenshot-preview").textContent = "";
@@ -902,7 +929,7 @@ function renderRegistrationReview({ teamName, registrationType, members }) {
     : `All ${members.length} members' details are required. Confirm only after checking every name, college, mobile number, and email address.`;
   document.querySelector("#registration-review-summary").innerHTML = `
     <div class="review-row"><span>Team name</span><strong>${escapeHtml(teamName)}</strong></div>
-    <div class="review-row"><span>Registration type</span><strong>${isInternal ? "Internal college participant (free)" : "External participant (₹99 per member)"}</strong></div>
+    <div class="review-row"><span>Registration type</span><strong>${isInternal ? "Internal · SIMATS student (free)" : "External · Other college (₹99 per member)"}</strong></div>
     <div class="review-row"><span>Members</span><strong>${members.length} of ${MAX_MEMBER_COUNT}</strong></div>
     <p class="review-members-title">MEMBER DETAILS</p>
     ${members.map((member, index) => `
@@ -927,6 +954,11 @@ function renderRegistrationReview({ teamName, registrationType, members }) {
 teamForm.addEventListener("submit", (event) => {
   event.preventDefault();
   validateTeamFormFields();
+  if (!getRegistrationType()) {
+    showToast("Choose whether you are a SIMATS (internal) or external participant.");
+    document.querySelector(".registration-type-field")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   if (!teamForm.reportValidity()) {
     showToast("Please complete every required field marked with * before continuing.");
     return;
@@ -1034,7 +1066,7 @@ async function submitTeamRegistration({ teamName, registrationType, members }) {
   teamForm.hidden = true;
   if (registrationType === "internal") {
     document.querySelector("#success-message").textContent =
-      `${draftTeam.teamName} is registered as an internal team. Your registration is free.`;
+      `${draftTeam.teamName} is registered as a SIMATS internal team. No payment is required.`;
     const registrationCodeWrap = document.querySelector("#success-registration-wrap");
     registrationCodeWrap.hidden = true;
     try {
@@ -1424,7 +1456,7 @@ async function fetchAllAdminTeams() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from("ideaforge_teams")
-      .select("id, team_name, team_code, registration_type, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, register_number, is_team_contact)")
+      .select("id, team_name, team_code, registration_type, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, email, register_number, is_team_contact)")
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(from, from + pageSize - 1);
@@ -1514,6 +1546,7 @@ async function loadAdminDashboard() {
     const membersHtml = members.map((member) => `
       <div class="admin-member-row">
         <strong>${escapeHtml(member.full_name)}${member.is_team_contact ? " · Team contact" : ""}</strong>
+        <span>Email: ${escapeHtml(member.email ?? "Not available")}</span>
         <span>${escapeHtml(member.college_name)} · ${escapeHtml(member.mobile_number)}${member.register_number ? ` · Register no. ${escapeHtml(member.register_number)}` : ""}</span>
       </div>`).join("");
     const teamContact = members.find((member) => member.is_team_contact) ?? members[0];
@@ -1534,7 +1567,7 @@ async function loadAdminDashboard() {
     card.innerHTML = `
       <div class="admin-payment-row">
         <div class="payment-team-cell"><strong>${escapeHtml(team.team_name)}</strong><span>${escapeHtml(team.team_code)} · ${team.registration_type === "internal" ? "Internal" : "External"}</span></div>
-        <div class="payment-contact-cell"><strong>${escapeHtml(teamContact?.full_name ?? "—")}</strong></div>
+        <div class="payment-contact-cell"><strong>${escapeHtml(teamContact?.full_name ?? "—")}</strong><span>${escapeHtml(teamContact?.email ?? "Email not available")}</span></div>
         <div class="payment-proof-cell">${paymentHtml}</div>
         <div><span class="status-pill ${team.payment_status === "approved" || team.payment_status === "not_required" ? "approved" : team.payment_status === "rejected" ? "reupload-requested" : ""}">${statusLabels[team.payment_status] ?? "UNKNOWN"}</span></div>
         <div class="payment-date-cell">${team.payment_submitted_at ? new Date(team.payment_submitted_at).toLocaleString() : "—"}</div>
@@ -1570,6 +1603,7 @@ function renderAdminUsers(teams) {
     const memberRows = members.map((member) => {
       const searchText = [
         member.full_name,
+        member.email,
         member.college_name,
         member.mobile_number,
         member.register_number,
@@ -1579,7 +1613,7 @@ function renderAdminUsers(teams) {
           <span class="admin-user-avatar" aria-hidden="true">${escapeHtml(String(member.full_name ?? "").trim().charAt(0).toUpperCase() || "?")}</span>
           <div><strong>${escapeHtml(member.full_name)}</strong>${member.is_team_contact ? '<span class="admin-team-leader">TEAM LEADER</span>' : ""}</div>
         </div>
-        <div class="admin-user-contact"><span>${escapeHtml(member.mobile_number)}</span></div>
+        <div class="admin-user-contact"><span>${escapeHtml(member.mobile_number)}</span><span>${escapeHtml(member.email ?? "Email not available")}</span></div>
         <div class="admin-user-college">${escapeHtml(member.college_name)}${member.register_number ? `<span class="admin-user-register-number">Register no. ${escapeHtml(member.register_number)}</span>` : ""}</div>
       </article>`;
     }).join("");
@@ -2608,6 +2642,7 @@ document.addEventListener("click", (event) => {
   }
 });
 
+updateRegistrationTypeSelection();
 renderMembers();
 updateRegistrationLinks();
 renderRoute();

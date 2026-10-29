@@ -216,8 +216,8 @@
             <div class="register-intro reveal">
               <h2>Bring your<br /><span>people.</span></h2>
               <p>One person submits the team registration and enters the details for every member. You can register 2–5 participants.</p>
-              <div class="form-step"><span>01</span><p><strong>Team details</strong><br />Tell us who’s building.</p></div>
-              <div class="form-step"><span>02</span><p><strong>Payment details</strong><br />Upload proof and enter the UTR.</p></div>
+              <div class="form-step"><span>01</span><p><strong>Team details</strong><br />Choose internal or external, then tell us who’s building.</p></div>
+              <div class="form-step"><span>02</span><p><strong>Payment details</strong><br />Only external teams pay ₹99 per member. SIMATS internal teams skip this step.</p></div>
             </div>
             <div class="form-panel reveal">
               <div id="registration-setup" class="closed-notice">
@@ -264,11 +264,47 @@
                   <div><span class="form-overline" id="team-form-step">STEP 01 / 02</span><h3>Team details</h3></div>
                   <span class="required-note">* REQUIRED</span>
                 </div>
-                <label class="field-label" for="registration-type">Registration type <span>*</span></label>
-                <select class="text-input" id="registration-type" name="registrationType" required>
-                  <option value="external" selected>External participant (₹99 per member)</option>
-                  <option value="internal">Internal college participant (Free)</option>
-                </select>
+                <fieldset class="registration-type-field">
+                  <legend class="field-label">Choose your participant type <span>*</span></legend>
+                  <p class="registration-type-hint">Pick the option that matches your college. Your fee and the details we ask for change based on this choice.</p>
+                  <div class="registration-type-options" role="radiogroup" aria-label="Registration type">
+                    <label class="registration-type-card" data-registration-card="internal">
+                      <input type="radio" name="registrationType" value="internal" required />
+                      <span class="registration-type-check" aria-hidden="true"></span>
+                      <span class="registration-type-body">
+                        <span class="registration-type-tags">
+                          <span class="registration-type-tag tag-free">FREE · ₹0</span>
+                          <span class="registration-type-tag tag-internal">INTERNAL</span>
+                        </span>
+                        <strong class="registration-type-title">Internal participant</strong>
+                        <span class="registration-type-subtitle">I study at SIMATS / Saveetha.</span>
+                        <span class="registration-type-perks">
+                          <span>✓ No registration fee</span>
+                          <span>✓ College filled in as SIMATS</span>
+                          <span>✓ College register number required</span>
+                        </span>
+                      </span>
+                    </label>
+                    <label class="registration-type-card" data-registration-card="external">
+                      <input type="radio" name="registrationType" value="external" required />
+                      <span class="registration-type-check" aria-hidden="true"></span>
+                      <span class="registration-type-body">
+                        <span class="registration-type-tags">
+                          <span class="registration-type-tag tag-paid">₹99 / MEMBER</span>
+                          <span class="registration-type-tag tag-external">EXTERNAL</span>
+                        </span>
+                        <strong class="registration-type-title">External participant</strong>
+                        <span class="registration-type-subtitle">I study at a college other than SIMATS.</span>
+                        <span class="registration-type-perks">
+                          <span>✓ ₹99 per team member</span>
+                          <span>✓ Enter your own college name</span>
+                          <span>✓ Pay after checking your details</span>
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                  <p class="registration-type-note" id="registration-type-note">Select one option above to continue.</p>
+                </fieldset>
                 <label class="field-label" for="team-name">Team name <span>*</span></label>
                 <input class="text-input" id="team-name" name="teamName" maxlength="60" placeholder="Give your team a name" required />
                 <div class="members-heading">
@@ -457,7 +493,7 @@
           <section class="admin-page admin-registrations" id="admin-users-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div><span class="prototype-note" id="admin-user-count">0 participants</span></div>
             <div class="admin-toolbar">
-              <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-user-search" type="search" placeholder="Search name, college, team, or phone…" autocomplete="off" /></label>
+              <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-user-search" type="search" placeholder="Search name, email, college, team, or phone…" autocomplete="off" /></label>
               <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter participants by team type">
                 <option value="all">All team types</option><option value="internal">Internal only</option><option value="external">External only</option>
               </select>

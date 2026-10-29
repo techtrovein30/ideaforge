@@ -110,6 +110,86 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 select.text-input { color-scheme: dark; }
 .text-input::placeholder { color: #6e6865; }
 .text-input:focus { border-color: var(--orange); outline: none; }
+.registration-type-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.registration-type-field .field-label { margin-top: 0; }
+.registration-type-hint { margin: 0 0 14px; color: #a9a09c; font-size: 12px; line-height: 1.65; }
+.registration-type-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.registration-type-card {
+  position: relative;
+  display: flex;
+  min-height: 196px;
+  padding: 18px 16px;
+  border: 2px solid rgba(255, 255, 255, .12);
+  border-radius: 16px;
+  background: #171717;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.registration-type-card:hover { border-color: rgba(255, 154, 88, .55); transform: translateY(-2px); }
+.registration-type-card:has(input:checked),
+.registration-type-card.selected {
+  border-color: var(--orange);
+  background: linear-gradient(150deg, rgba(255, 154, 88, .16), rgba(255, 81, 67, .06));
+  box-shadow: 0 0 0 3px rgba(255, 154, 88, .12), 0 12px 30px rgba(0, 0, 0, .35);
+}
+.registration-type-card:has(input:focus-visible) { outline: 2px solid var(--orange); outline-offset: 3px; }
+.registration-type-card input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.registration-type-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-right: 26px; }
+.registration-type-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 3px; }
+.registration-type-tag { padding: 4px 8px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: .09em; }
+.tag-free { color: #0f1a10; background: #9ff2b0; }
+.tag-internal { color: #9ff2b0; border: 1px solid rgba(159, 242, 176, .35); background: rgba(159, 242, 176, .1); }
+.tag-paid { color: #1c1208; background: var(--orange); }
+.tag-external { color: var(--orange); border: 1px solid rgba(255, 154, 88, .35); background: rgba(255, 154, 88, .1); }
+.registration-type-title { font-size: clamp(19px, 2.4vw, 25px); line-height: 1.12; letter-spacing: -.03em; }
+.registration-type-subtitle { color: #ded5d0; font-size: 13px; line-height: 1.45; }
+.registration-type-perks { display: grid; gap: 5px; margin-top: 10px; color: #a49b97; font-size: 11px; line-height: 1.45; }
+.registration-type-check {
+  position: absolute;
+  top: 15px;
+  right: 14px;
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, .22);
+  border-radius: 50%;
+  background: #111;
+}
+.registration-type-check::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 7px;
+  width: 5px;
+  height: 10px;
+  border: solid #1a1008;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+}
+.registration-type-card:has(input:checked) .registration-type-check,
+.registration-type-card.selected .registration-type-check { border-color: var(--orange); background: var(--orange); }
+.registration-type-card:has(input:checked) .registration-type-check::after,
+.registration-type-card.selected .registration-type-check::after { opacity: 1; }
+.registration-type-note {
+  margin: 11px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 154, 88, .2);
+  border-radius: 10px;
+  background: rgba(255, 154, 88, .08);
+  color: #e0d4cb;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.registration-type-note.is-selected { color: #ffd0ad; }
+#team-form-submit:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+@media (max-width: 640px) {
+  .registration-type-options { grid-template-columns: 1fr; }
+  .registration-type-card { min-height: 0; padding: 16px 14px; }
+  .registration-type-title { font-size: 22px; }
+  .registration-type-subtitle { font-size: 14px; }
+  .registration-type-perks { font-size: 12px; }
+  .registration-type-card:hover { transform: none; }
+}
 .members-heading { align-items: end; margin-top: 27px; }
 .members-heading h4 { margin: 0; font-size: 14px; }
 .members-heading p { margin: 5px 0 0; font-size: 10px; color: #948d8a; }
