@@ -56,6 +56,7 @@
                   <h2 id="profile-team-name"></h2>
                   <div class="profile-info-grid">
                     <div><span>TEAM CODE</span><strong id="profile-team-code"></strong></div>
+                    <div><span>REGISTRATION TYPE</span><strong id="profile-registration-type"></strong></div>
                     <div><span>TEAM DETAILS SAVED</span><strong id="profile-team-registered"></strong></div>
                     <div><span>ATTENDANCE</span><strong id="profile-team-checkin">Not checked in</strong></div>
                   </div>
@@ -263,6 +264,11 @@
                   <div><span class="form-overline" id="team-form-step">STEP 01 / 02</span><h3>Team details</h3></div>
                   <span class="required-note">* REQUIRED</span>
                 </div>
+                <label class="field-label" for="registration-type">Registration type <span>*</span></label>
+                <select class="text-input" id="registration-type" name="registrationType" required>
+                  <option value="external" selected>External participant (₹99 per member)</option>
+                  <option value="internal">Internal college participant (Free)</option>
+                </select>
                 <label class="field-label" for="team-name">Team name <span>*</span></label>
                 <input class="text-input" id="team-name" name="teamName" maxlength="60" placeholder="Give your team a name" required />
                 <div class="members-heading">
@@ -275,7 +281,7 @@
                 </div>
                 <div id="members-list" class="members-list"></div>
                 <p class="form-hint">The first member is the team contact and will be used for registration follow-up.</p>
-                <button class="button button-primary button-wide" type="submit">Continue to payment <span>→</span></button>
+                <button class="button button-primary button-wide" id="team-form-submit" type="submit">Continue to payment <span>→</span></button>
                 <p class="prototype-note">Your team details are saved securely for the organizers. The payment screenshot is used only to verify your registration.</p>
               </form>
 

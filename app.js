@@ -163,8 +163,10 @@ async function loadParticipantTeam(userId) {
   updateRegistrationLinks();
   document.querySelector("#profile-team-code").textContent =
     paymentSubmitted ? team.team_code || "—" : "Issued after payment submission";
-  document.querySelector("#profile-registration-type").textContent =
-    team.registration_type === "internal" ? "Internal · Free" : "External";
+  const profileRegType = document.querySelector("#profile-registration-type");
+  if (profileRegType) {
+    profileRegType.textContent = team.registration_type === "internal" ? "Internal · Free" : "External";
+  }
   document.querySelector("#profile-team-registered").textContent =
     team.created_at ? new Date(team.created_at).toLocaleString() : "—";
   if (!paymentSubmitted && team.is_team_contact) {
@@ -513,7 +515,7 @@ function renderMembers() {
   const previousValues = new Map(
     [...membersList.querySelectorAll("input")].map((input) => [input.id, input.value]),
   );
-  const isInternal = document.querySelector("#registration-type").value === "internal";
+  const isInternal = document.querySelector("#registration-type")?.value === "internal";
   membersList.innerHTML = "";
   for (let index = 0; index < memberCount; index += 1) {
     const card = document.createElement("section");
@@ -541,9 +543,11 @@ function renderMembers() {
   document.querySelector("#add-member").disabled = memberCount >= MAX_MEMBER_COUNT;
   document.querySelector("#remove-member").disabled = memberCount <= INITIAL_MEMBER_COUNT;
   const submitButton = document.querySelector("#team-form-submit");
-  submitButton.innerHTML = isInternal
-    ? "Complete free registration <span>↗</span>"
-    : "Continue to payment <span>→</span>";
+  if (submitButton) {
+    submitButton.innerHTML = isInternal
+      ? "Complete free registration <span>↗</span>"
+      : "Continue to payment <span>→</span>";
+  }
   const stepIndicator = document.querySelector("#team-form-step");
   if (stepIndicator) {
     stepIndicator.textContent = isInternal ? "INTERNAL REGISTRATION" : "STEP 01 / 02";
@@ -685,7 +689,7 @@ function validateTeamFormFields() {
 
   const emailInputs = [...teamForm.querySelectorAll('input[name="memberEmail"]')];
   const normalizedEmails = emailInputs.map((input) => input.value.trim().toLowerCase());
-  const isInternal = document.querySelector("#registration-type").value === "internal";
+  const isInternal = document.querySelector("#registration-type")?.value === "internal";
   const registerInputs = isInternal ? [...teamForm.querySelectorAll('input[name="memberRegisterNumber"]')] : [];
   const normalizedRegisterNumbers = registerInputs.map((input) => input.value.trim().toLowerCase());
   for (let index = 0; index < memberCount; index += 1) {
@@ -743,7 +747,7 @@ teamForm.addEventListener("input", (event) => {
   if (event.target instanceof HTMLInputElement) validateTeamFormFields();
 });
 
-document.querySelector("#registration-type").addEventListener("change", () => {
+document.querySelector("#registration-type")?.addEventListener("change", () => {
   renderMembers();
   validateTeamFormFields();
 });
