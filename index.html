@@ -285,6 +285,21 @@
                 <p class="prototype-note">Your team details are saved securely for the organizers. The payment screenshot is used only to verify your registration.</p>
               </form>
 
+              <dialog class="registration-review-dialog" id="registration-review-dialog" aria-labelledby="registration-review-title">
+                <header class="registration-review-header">
+                  <div><span class="form-overline">FINAL CHECK</span><h3 id="registration-review-title">Confirm every detail</h3></div>
+                  <button class="payment-proof-close" type="button" id="registration-review-close" aria-label="Close review">×</button>
+                </header>
+                <div class="registration-review-body">
+                  <p class="registration-review-warning" id="registration-review-warning"></p>
+                  <div id="registration-review-summary"></div>
+                </div>
+                <footer class="registration-review-footer">
+                  <button class="button button-quiet" type="button" id="registration-review-edit">← Edit details</button>
+                  <button class="button button-primary" type="button" id="registration-review-confirm">Confirm &amp; register <span>↗</span></button>
+                </footer>
+              </dialog>
+
               <form id="payment-form" hidden>
                 <div class="form-heading">
                   <div><span class="form-overline">STEP 02 / 02</span><h3>Payment details</h3></div>
@@ -427,6 +442,9 @@
               <select class="text-input admin-filter" id="admin-payment-filter" aria-label="Filter payments">
                 <option value="all">All registrations</option><option value="awaiting_payment">Incomplete / no payment</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Re-upload requested</option><option value="not_required">Free · internal</option>
               </select>
+              <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter by team type">
+                <option value="all">All team types</option><option value="internal">Internal only</option><option value="external">External only</option>
+              </select>
             </div>
             <div class="admin-payment-table">
               <div class="admin-payment-columns">
@@ -440,6 +458,9 @@
             <div class="admin-table-heading"><div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div><span class="prototype-note" id="admin-user-count">0 participants</span></div>
             <div class="admin-toolbar">
               <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-user-search" type="search" placeholder="Search name, college, team, or phone…" autocomplete="off" /></label>
+              <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter participants by team type">
+                <option value="all">All team types</option><option value="internal">Internal only</option><option value="external">External only</option>
+              </select>
             </div>
             <div id="admin-user-list" class="admin-user-list"></div>
             <div class="empty-state" id="admin-users-empty" hidden><span>✳</span><strong>No matching participants</strong><p>Try a different search.</p></div>
@@ -458,6 +479,9 @@
               <div class="checkin-form">
                 <label class="field-label" for="checkin-search">Search team or participant</label>
                 <input class="text-input" id="checkin-search" type="search" autocomplete="off" placeholder="Team name, code, member, or phone" />
+                <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter check-in results by team type">
+                  <option value="all">All team types</option><option value="internal">Internal only</option><option value="external">External only</option>
+                </select>
                 <div class="checkin-result" id="checkin-result" role="status" aria-live="polite" hidden></div>
                 <div class="checkin-search-results" id="checkin-search-results" aria-live="polite"></div>
               </div>
@@ -497,6 +521,9 @@
             </div>
             <div class="admin-toolbar">
               <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-email-search" type="search" placeholder="Search team, code, or recipient…" autocomplete="off" /></label>
+              <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter emails by team type">
+                <option value="all">All team types</option><option value="internal">Internal only</option><option value="external">External only</option>
+              </select>
             </div>
             <div class="admin-table admin-email-table">
               <div class="admin-table-columns admin-email-columns"><span>STATUS</span><span>TEAM / CODE</span><span>RECIPIENT</span><span>DETAILS</span><span>ACTION</span></div>
@@ -520,6 +547,11 @@
               <span class="prototype-note" id="admin-deleted-count">0 deleted registrations</span>
             </div>
             <p class="admin-helper-copy">Deleting a registration removes it from the live registration tables, participant profiles, payment queue, and private proof storage. An administrator-only snapshot is kept here for audit purposes.</p>
+            <div class="admin-toolbar">
+              <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter deleted registrations by team type">
+                <option value="all">All team types</option><option value="internal">Internal only</option><option value="external">External only</option>
+              </select>
+            </div>
             <div id="admin-deleted-list" class="admin-deleted-list"></div>
             <div class="empty-state" id="admin-deleted-empty" hidden><span>✳</span><strong>No deleted registrations</strong><p>Teams deleted from the admin console are archived here with their roster and payment details.</p></div>
           </section>

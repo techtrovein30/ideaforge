@@ -123,9 +123,55 @@ select.text-input { color-scheme: dark; }
 .member-fields .field-label { font-size: 9px; margin-top: 12px; }
 .member-fields .text-input { min-height: 40px; font-size: 11px; }
 .register-number-field { grid-column: 1 / -1; }
+.member-college-default strong { display: flex; align-items: center; min-height: 40px; padding: 0 13px; border: 1px dashed rgba(255, 255, 255, .14); background: #141414; color: var(--orange); font-family: var(--mono); font-size: 11px; letter-spacing: .05em; }
+.member-college-default .field-label { font-size: 9px; margin-top: 12px; }
 .form-hint { color: #827c79; font-size: 10px; line-height: 1.65; margin: 10px 0 19px; }
 .button-wide { width: 100%; margin-top: 10px; }
 .prototype-note { color: #837d79; font-size: 9px; line-height: 1.65; margin: 13px 0 0; }
+.button-quiet { background: #202020; border: 1px solid var(--line); color: #ded7d3; }
+.button-quiet:hover { border-color: var(--orange); color: var(--orange); }
+.registration-review-dialog {
+  width: min(680px, calc(100vw - 28px));
+  max-width: none;
+  max-height: 90vh;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #292929;
+  border-radius: 13px;
+  background: #151515;
+  color: var(--text);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, .75);
+}
+.registration-review-dialog::backdrop { background: rgba(0, 0, 0, .82); }
+.registration-review-dialog[open] { display: flex; flex-direction: column; }
+.registration-review-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.registration-review-header h3 { margin: 6px 0 0; font-size: 20px; letter-spacing: -.03em; }
+.registration-review-body { padding: 16px 20px; overflow-y: auto; }
+.registration-review-warning { margin: 0 0 14px; color: #ffca52; font-size: 11px; line-height: 1.6; }
+.review-row { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
+.review-row span { color: #a8a09c; }
+.review-row strong { text-align: right; overflow-wrap: anywhere; }
+.review-members-title { margin: 16px 0 7px; color: var(--orange); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; }
+.review-member { padding: 12px 13px; margin-top: 9px; border: 1px solid rgba(255, 255, 255, .07); background: #171717; }
+.review-member-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 12px; }
+.review-member-top span { color: var(--orange); font-family: var(--mono); font-size: 9px; }
+.review-member dl { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 16px; margin: 0; }
+.review-member dt { color: #8d8582; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
+.review-member dd { margin: 2px 0 0; font-size: 11px; overflow-wrap: anywhere; }
+.review-fee { margin: 14px 0 0; font-size: 12px; color: #ffca52; }
+.registration-review-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px 16px; border-top: 1px solid var(--line); }
+.registration-review-footer .button { margin-top: 0; }
+@media (max-width: 520px) {
+  .review-member dl { grid-template-columns: 1fr; }
+  .registration-review-footer { display: grid; grid-template-columns: 1fr; }
+}
 .back-button { color: #b7afab; cursor: pointer; background: transparent; border: 0; font-size: 11px; }
 .back-button:hover { color: var(--orange); }
 .payment-team-summary { padding: 12px 14px; background: #1a1a1a; color: #c5beba; font-size: 11px; line-height: 1.7; border-left: 2px solid var(--red); }
@@ -1045,11 +1091,13 @@ body { background: var(--bg); }
 .admin-shortcuts strong { font-size: 12px; }
 .admin-shortcuts small { color: #8c8581; font-size: 10px; }
 .admin-shortcuts b { position: absolute; top: 17px; right: 17px; color: #ff6975; }
-.admin-toolbar { display: flex; align-items: center; gap: 10px; margin: 18px 0; }
+.admin-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
 .admin-search-wrap { position: relative; display: flex; flex: 1 1 380px; align-items: center; max-width: 700px; }
 .admin-search-wrap > span { position: absolute; left: 14px; color: #8c8581; font-size: 22px; }
 .admin-search.admin-search { width: 100%; max-width: none; margin: 0; padding-left: 42px; }
 .admin-filter { width: min(220px, 35%); }
+.admin-toolbar .admin-filter[data-registration-type-filter] { width: auto; min-width: 165px; }
+.checkin-form .admin-filter[data-registration-type-filter] { width: auto; }
 .admin-team-list { gap: 14px; }
 .admin-team-card { overflow: hidden; border-radius: 12px; background: #111; }
 .admin-team-header { background: #141414; }

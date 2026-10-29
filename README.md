@@ -116,8 +116,10 @@ Apply
 [`supabase/migrations/20261028210000_ideaforge_internal_free_registration.sql`](./supabase/migrations/20261028210000_ideaforge_internal_free_registration.sql)
 after the deferred-team-code migration to enable free internal team
 registrations. Internal teams must provide a unique register number for each
-member and receive a team code without submitting payment. External teams
-continue through the existing ₹99-per-member payment flow.
+member and receive a team code without submitting payment. The registration form
+sets every internal member's college name to **SIMATS**; external teams choose
+their own college. External teams continue through the existing ₹99-per-member
+payment flow.
 
 Apply
 [`supabase/migrations/20261029120000_ideaforge_delete_team.sql`](./supabase/migrations/20261029120000_ideaforge_delete_team.sql)

@@ -21,12 +21,15 @@ const adminView = document.querySelector("#admin-view");
 const profilePage = document.querySelector("#profile, #profile-page");
 const teamForm = document.querySelector("#team-form");
 const paymentForm = document.querySelector("#payment-form");
+const registrationReviewDialog = document.querySelector("#registration-review-dialog");
 const successPanel = document.querySelector("#registration-success");
 const membersList = document.querySelector("#members-list");
 const toast = document.querySelector("#toast");
 const adminToast = document.querySelector("#admin-toast");
 
 let draftTeam = null;
+let pendingRegistration = null;
+let registrationSubmitting = false;
 let memberCount = INITIAL_MEMBER_COUNT;
 let selectedScreenshot = null;
 let toastTimer;
@@ -34,6 +37,7 @@ let participantUser = null;
 let participantAuthReady = !supabase;
 let adminEmailsData = [];
 let activeEmailFilter = "all";
+let activeRegistrationTypeFilter = "all";
 let activeParticipantTeam = null;
 let participantTeamStatus = "checking";
 let participantCheckinScannerControls = null;
@@ -524,7 +528,9 @@ function renderMembers() {
       <div class="member-card-top"><span>Member ${index + 1}</span><span>${index === 0 ? "TEAM CONTACT" : "PARTICIPANT"}</span></div>
       <div class="member-fields">
         <div><label class="field-label" for="member-${index}-name">Full name <span>*</span></label><input class="text-input" id="member-${index}-name" name="memberName" autocomplete="name" maxlength="100" required /></div>
-        <div><label class="field-label" for="member-${index}-college">College name <span>*</span></label><input class="text-input" id="member-${index}-college" name="memberCollege" maxlength="160" required /></div>
+        ${isInternal
+          ? `<div class="member-college-default"><span class="field-label">College name</span><strong>SIMATS</strong><input type="hidden" id="member-${index}-college" name="memberCollege" value="SIMATS" /></div>`
+          : `<div><label class="field-label" for="member-${index}-college">College name <span>*</span></label><input class="text-input" id="member-${index}-college" name="memberCollege" maxlength="160" required /></div>`}
         <div><label class="field-label" for="member-${index}-mobile">Mobile number <span>*</span></label><input class="text-input" id="member-${index}-mobile" name="memberMobile" type="tel" inputmode="tel" autocomplete="tel" minlength="7" maxlength="18" title="Enter a valid mobile number" required /></div>
         <div><label class="field-label" for="member-${index}-email">Email address <span>*</span></label><input class="text-input" id="member-${index}-email" name="memberEmail" type="email" autocomplete="email" maxlength="254" required /></div>
         <div class="register-number-field" ${isInternal ? "" : "hidden"}><label class="field-label" for="member-${index}-register-number">Register number <span>*</span></label><input class="text-input" id="member-${index}-register-number" name="memberRegisterNumber" maxlength="40" autocomplete="off" placeholder="College register number" ${isInternal ? "required" : "disabled"} /></div>
@@ -533,6 +539,11 @@ function renderMembers() {
   }
   for (const input of membersList.querySelectorAll("input")) {
     input.value = previousValues.get(input.id) ?? "";
+  }
+  if (isInternal) {
+    for (const input of membersList.querySelectorAll('input[name="memberCollege"]')) {
+      input.value = "SIMATS";
+    }
   }
   const teamContactEmail = document.querySelector("#member-0-email");
   if (teamContactEmail) {
@@ -714,19 +725,28 @@ function validateTeamFormFields() {
         : "",
     );
     mobileInput.setCustomValidity(
-      !/^[0-9+() -]{7,18}$/.test(mobile)
-        ? "Enter a valid mobile number using 7–18 digits and + ( ) - characters."
+      !/^[0-9+() -]{7,18}$/.test(mobile) ||
+        mobile.replace(/\D/g, "").length < 7 ||
+        mobile.replace(/\D/g, "").length > 15
+        ? "Enter a valid mobile number with 7–15 digits."
         : "",
     );
 
-    const isDuplicate = email !== "" && normalizedEmails.indexOf(email) !== index;
+    const emailMissing = email === "";
+    const isDuplicate = !emailMissing && normalizedEmails.indexOf(email) !== index;
+    const emailInvalid =
+      !emailMissing && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     emailInput.setCustomValidity(
-      isDuplicate
-        ? "Each team member must use a different email address."
-        : index === 0 && participantUser?.email
-            && email !== participantUser.email.trim().toLowerCase()
-          ? "The team leader's email must match the signed-in account."
-          : "",
+      emailMissing
+        ? "Enter this member's email address."
+        : emailInvalid
+          ? "Enter a valid email address."
+          : isDuplicate
+            ? "Each team member must use a different email address."
+            : index === 0 && participantUser?.email
+                && email !== participantUser.email.trim().toLowerCase()
+              ? "The team leader's email must match the signed-in account."
+              : "",
     );
     if (registerNumberInput && !registerNumberInput.disabled) {
       const registerNumber = registerNumberInput.value.trim();
@@ -859,27 +879,119 @@ document.querySelector("#remove-member").addEventListener("click", () => {
   }
 });
 
-teamForm.addEventListener("submit", async (event) => {
+function findIncompleteRegistrationField(members, isInternal) {
+  for (let index = 0; index < members.length; index += 1) {
+    const member = members[index];
+    const requiredFields = [
+      ["full name", member.name],
+      ["college name", member.college],
+      ["mobile number", member.mobile],
+      ["email address", member.email],
+    ];
+    if (isInternal) requiredFields.push(["register number", member.registerNumber]);
+    const incomplete = requiredFields.find(([, value]) => !String(value ?? "").trim());
+    if (incomplete) return `Member ${index + 1}: enter the ${incomplete[0]}.`;
+  }
+  return "";
+}
+
+function renderRegistrationReview({ teamName, registrationType, members }) {
+  const isInternal = registrationType === "internal";
+  document.querySelector("#registration-review-warning").textContent = isInternal
+    ? `All ${members.length} members' details are required. Confirm only after checking every name, mobile number, email address, and register number. College name is set to SIMATS for internal teams.`
+    : `All ${members.length} members' details are required. Confirm only after checking every name, college, mobile number, and email address.`;
+  document.querySelector("#registration-review-summary").innerHTML = `
+    <div class="review-row"><span>Team name</span><strong>${escapeHtml(teamName)}</strong></div>
+    <div class="review-row"><span>Registration type</span><strong>${isInternal ? "Internal college participant (free)" : "External participant (₹99 per member)"}</strong></div>
+    <div class="review-row"><span>Members</span><strong>${members.length} of ${MAX_MEMBER_COUNT}</strong></div>
+    <p class="review-members-title">MEMBER DETAILS</p>
+    ${members.map((member, index) => `
+      <section class="review-member">
+        <div class="review-member-top"><strong>${index === 0 ? "Team contact" : `Member ${index + 1}`}</strong><span>${index === 0 ? "REQUIRED CONTACT" : "PARTICIPANT"}</span></div>
+        <dl>
+          <div><dt>Full name</dt><dd>${escapeHtml(member.name)}</dd></div>
+          <div><dt>College name</dt><dd>${escapeHtml(member.college)}</dd></div>
+          <div><dt>Mobile number</dt><dd>${escapeHtml(member.mobile)}</dd></div>
+          <div><dt>Email address</dt><dd>${escapeHtml(member.email)}</dd></div>
+          ${isInternal ? `<div><dt>Register number</dt><dd>${escapeHtml(member.registerNumber)}</dd></div>` : ""}
+        </dl>
+      </section>
+    `).join("")}
+    ${isInternal ? "" : `<p class="review-fee">Payment due after confirming: ₹${members.length * 99} for ${members.length} members.</p>`}
+  `;
+  document.querySelector("#registration-review-confirm").innerHTML = isInternal
+    ? "Confirm free registration <span>↗</span>"
+    : "Confirm & continue to payment <span>→</span>";
+}
+
+teamForm.addEventListener("submit", (event) => {
   event.preventDefault();
   validateTeamFormFields();
-  if (!teamForm.reportValidity()) return;
+  if (!teamForm.reportValidity()) {
+    showToast("Please complete every required field marked with * before continuing.");
+    return;
+  }
   if (!supabase) {
     showToast("Registration services are not configured yet.");
     return;
   }
+  const formData = new FormData(teamForm);
+  const teamName = String(formData.get("teamName")).trim();
+  const registrationType = String(formData.get("registrationType"));
   const members = getMembersFromForm();
   if (members.length < INITIAL_MEMBER_COUNT || members.length > MAX_MEMBER_COUNT) {
     showToast("A team must have between 2 and 5 members.");
     return;
   }
-  const submitButton = teamForm.querySelector('button[type="submit"]');
+  const incomplete = findIncompleteRegistrationField(members, registrationType === "internal");
+  if (incomplete) {
+    showToast(incomplete);
+    return;
+  }
+  pendingRegistration = { teamName, registrationType, members };
+  renderRegistrationReview(pendingRegistration);
+  registrationReviewDialog.showModal();
+});
+
+document.querySelector("#registration-review-close").addEventListener("click", () => {
+  registrationReviewDialog.close();
+});
+
+document.querySelector("#registration-review-edit").addEventListener("click", () => {
+  registrationReviewDialog.close();
+  document.querySelector("#team-name").focus();
+});
+
+registrationReviewDialog.addEventListener("click", (event) => {
+  if (event.target === registrationReviewDialog) registrationReviewDialog.close();
+});
+
+document.querySelector("#registration-review-confirm").addEventListener("click", async () => {
+  if (!pendingRegistration || registrationSubmitting) return;
+  const button = document.querySelector("#registration-review-confirm");
+  const previousText = button.innerHTML;
+  registrationSubmitting = true;
+  button.disabled = true;
+  button.textContent = "Saving team…";
+  const succeeded = await submitTeamRegistration(pendingRegistration);
+  registrationSubmitting = false;
+  button.disabled = false;
+  button.innerHTML = previousText;
+  if (succeeded) {
+    registrationReviewDialog.close();
+    pendingRegistration = null;
+  }
+});
+
+async function submitTeamRegistration({ teamName, registrationType, members }) {
+  const submitButton = document.querySelector("#team-form-submit");
   submitButton.disabled = true;
   submitButton.dataset.originalText = submitButton.innerHTML;
   submitButton.textContent = "Saving team…";
   try {
     const { data: teamId, error } = await supabase.rpc("ideaforge_register_team", {
-      p_team_name: String(new FormData(teamForm).get("teamName")).trim(),
-      p_registration_type: String(new FormData(teamForm).get("registrationType")),
+      p_team_name: teamName,
+      p_registration_type: registrationType,
       p_members: members.map((member) => ({
         full_name: member.name,
         college_name: member.college,
@@ -901,26 +1013,26 @@ teamForm.addEventListener("submit", async (event) => {
           ? "This team includes an email already registered for the hackathon. If it is your account, view your profile; otherwise use a different email for that member."
           : error.message || "Could not save your team. Please try again.",
       );
-      return;
+      return false;
     }
 
     draftTeam = {
       id: teamId,
-      teamName: String(new FormData(teamForm).get("teamName")).trim(),
+      teamName,
       members,
       createdAt: new Date().toISOString(),
     };
   } catch (error) {
     console.error("Unexpected error while registering IdeaForge team.", error);
     showToast("Could not save your team because of a network error. Please try again.");
-    return;
+    return false;
   } finally {
     submitButton.disabled = false;
     submitButton.innerHTML = submitButton.dataset.originalText;
   }
 
   teamForm.hidden = true;
-  if (String(new FormData(teamForm).get("registrationType")) === "internal") {
+  if (registrationType === "internal") {
     document.querySelector("#success-message").textContent =
       `${draftTeam.teamName} is registered as an internal team. Your registration is free.`;
     const registrationCodeWrap = document.querySelector("#success-registration-wrap");
@@ -943,7 +1055,7 @@ teamForm.addEventListener("submit", async (event) => {
     successPanel.hidden = false;
     if (participantUser) void loadParticipantTeam(participantUser.id);
     successPanel.scrollIntoView({ behavior: "smooth", block: "center" });
-    return;
+    return true;
   }
   document.querySelector("#payment-team-summary").textContent =
     `${draftTeam.teamName} · ${members.length} members · Team contact: ${members[0].name}`;
@@ -953,7 +1065,8 @@ teamForm.addEventListener("submit", async (event) => {
   }
   paymentForm.hidden = false;
   paymentForm.scrollIntoView({ behavior: "smooth", block: "center" });
-});
+  return true;
+}
 
 document.querySelector("#back-to-team").addEventListener("click", () => {
   paymentForm.hidden = true;
@@ -1021,6 +1134,11 @@ paymentForm.addEventListener("submit", async (event) => {
     return;
   }
   const utr = String(new FormData(paymentForm).get("utr")).trim();
+  if (!utr) {
+    showToast("Enter the UTR / transaction reference shown in your payment screenshot.");
+    document.querySelector("#utr-number").focus();
+    return;
+  }
   const submitButton = paymentForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   submitButton.dataset.originalText = submitButton.innerHTML;
@@ -1412,6 +1530,7 @@ async function loadAdminDashboard() {
     const card = document.createElement("article");
     card.className = "admin-team-card";
     card.dataset.paymentStatus = team.payment_status;
+    card.dataset.registrationType = team.registration_type ?? "";
     card.innerHTML = `
       <div class="admin-payment-row">
         <div class="payment-team-cell"><strong>${escapeHtml(team.team_name)}</strong><span>${escapeHtml(team.team_code)} · ${team.registration_type === "internal" ? "Internal" : "External"}</span></div>
@@ -1470,7 +1589,7 @@ function renderAdminUsers(teams) {
       : paymentStatus === "awaiting_payment"
         ? "awaiting payment"
         : paymentStatus.replaceAll("_", " ");
-    return `<section class="admin-user-team" data-team-search="${escapeHtml(teamSearch)}" data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}">
+    return `<section class="admin-user-team" data-team-search="${escapeHtml(teamSearch)}" data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}" data-registration-type="${escapeHtml(team.registration_type ?? "")}">
       <header class="admin-user-team-heading">
         <div class="admin-user-team-title">
           <span class="admin-user-team-icon" aria-hidden="true">✳</span>
@@ -1493,6 +1612,11 @@ function filterAdminUsers(value) {
   const teams = [...document.querySelectorAll("#admin-user-list .admin-user-team")];
   let visibleTeams = 0;
   for (const team of teams) {
+    if (activeRegistrationTypeFilter !== "all" &&
+        team.dataset.registrationType !== activeRegistrationTypeFilter) {
+      team.hidden = true;
+      continue;
+    }
     const isTeamMatch = query !== "" && team.dataset.teamSearch.includes(query);
     const members = [...team.querySelectorAll(".admin-user-row")];
     let hasVisibleMember = false;
@@ -1563,7 +1687,7 @@ async function loadAdminDeletedHistory() {
     const proofCount = Array.isArray(record.screenshot_paths)
       ? record.screenshot_paths.length
       : 0;
-    return `<article class="admin-deleted-card">
+    return `<article class="admin-deleted-card" data-registration-type="${escapeHtml(record.registration_type ?? "")}">
       <header>
         <div class="admin-deleted-title">
           <strong>${escapeHtml(record.team_name)}</strong>
@@ -1587,6 +1711,27 @@ async function loadAdminDeletedHistory() {
       ${record.note ? `<p class="admin-deleted-note">${escapeHtml(record.note)}</p>` : ""}
     </article>`;
   }).join("");
+  filterAdminDeletedHistory();
+}
+
+function filterAdminDeletedHistory() {
+  const cards = [...document.querySelectorAll("#admin-deleted-list .admin-deleted-card")];
+  const empty = document.querySelector("#admin-deleted-empty");
+  if (!empty) return;
+  for (const card of cards) {
+    card.hidden = activeRegistrationTypeFilter !== "all" &&
+      card.dataset.registrationType !== activeRegistrationTypeFilter;
+  }
+  const visible = cards.some((card) => !card.hidden);
+  empty.hidden = visible;
+  if (!visible && cards.length > 0) {
+    empty.querySelector("strong").textContent = "No deleted registrations match this filter";
+    empty.querySelector("p").textContent = "Choose a different team type.";
+  } else if (visible) {
+    empty.querySelector("strong").textContent = "No deleted registrations";
+    empty.querySelector("p").textContent =
+      "Teams deleted from the admin console are archived here with their roster and payment details.";
+  }
 }
 
 function renderAdminEmails(emails, teams) {
@@ -1623,7 +1768,7 @@ function renderAdminEmails(emails, teams) {
       email.recipient_name ?? "",
       email.recipient_email ?? "",
     ].join(" ").toLowerCase();
-    return `<article class="admin-email-row" data-status="${escapeHtml(email.status)}" data-search="${escapeHtml(searchText)}">
+    return `<article class="admin-email-row" data-status="${escapeHtml(email.status)}" data-registration-type="${escapeHtml(team?.registration_type ?? "")}" data-search="${escapeHtml(searchText)}">
       <div><span class="status-pill ${email.status === "sent" ? "approved" : ""}">${escapeHtml(status)}</span></div>
       <div><strong>${escapeHtml(team?.team_name ?? "Unknown team")}</strong><span>${escapeHtml(team?.team_code ?? "No team code")}</span></div>
       <div><strong>${escapeHtml(email.recipient_name ?? "Team leader")}</strong><span>${escapeHtml(email.recipient_email ?? "No recipient")}</span></div>
@@ -1640,6 +1785,7 @@ function filterAdminPayments() {
   const cards = [...document.querySelectorAll("#admin-team-list .admin-team-card")];
   for (const card of cards) {
     card.hidden = (status !== "all" && card.dataset.paymentStatus !== status) ||
+      (activeRegistrationTypeFilter !== "all" && card.dataset.registrationType !== activeRegistrationTypeFilter) ||
       (query !== "" && !card.textContent.toLowerCase().includes(query));
   }
   document.querySelector("#admin-empty").hidden = cards.some((card) => !card.hidden);
@@ -1650,6 +1796,7 @@ function filterAdminEmails() {
   const rows = [...document.querySelectorAll("#admin-email-list .admin-email-row")];
   for (const row of rows) {
     row.hidden = (activeEmailFilter !== "all" && row.dataset.status !== activeEmailFilter) ||
+      (activeRegistrationTypeFilter !== "all" && row.dataset.registrationType !== activeRegistrationTypeFilter) ||
       (query !== "" && !row.dataset.search.includes(query));
   }
   document.querySelector("#admin-email-empty").hidden = rows.some((row) => !row.hidden);
@@ -2046,6 +2193,19 @@ document.querySelector("#admin-menu-toggle").addEventListener("click", (event) =
 document.querySelector("#admin-payment-search").addEventListener("input", filterAdminPayments);
 document.querySelector("#admin-payment-filter").addEventListener("change", filterAdminPayments);
 document.querySelector("#admin-email-search").addEventListener("input", filterAdminEmails);
+for (const select of document.querySelectorAll("[data-registration-type-filter]")) {
+  select.addEventListener("change", (event) => {
+    activeRegistrationTypeFilter = event.currentTarget.value;
+    for (const other of document.querySelectorAll("[data-registration-type-filter]")) {
+      other.value = activeRegistrationTypeFilter;
+    }
+    filterAdminPayments();
+    filterAdminUsers(document.querySelector("#admin-user-search").value);
+    filterAdminEmails();
+    filterAdminDeletedHistory();
+    renderAdminCheckinSearch();
+  });
+}
 document.querySelector("#toggle-participant-checkin").addEventListener("click", async (event) => {
   if (!activeAdmin || !supabase) {
     showToast("Sign in with an approved admin account first.", true);
@@ -2201,6 +2361,9 @@ function renderAdminCheckinSearch() {
   }
 
   const matches = adminTeamsData.filter((team) => {
+    if (activeRegistrationTypeFilter !== "all" && team.registration_type !== activeRegistrationTypeFilter) {
+      return false;
+    }
     const members = team.ideaforge_members ?? [];
     const searchable = [
       team.team_name,
