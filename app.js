@@ -106,7 +106,10 @@ function updateParticipantProfile(user) {
     teamContactEmail.value = user?.email ?? "";
     teamContactEmail.readOnly = Boolean(user?.email);
   }
-  if (!user) return;
+  if (!user) {
+    successPanel.hidden = true;
+    return;
+  }
 
   const metadata = user.user_metadata ?? {};
   document.querySelector("#profile-name").textContent =
@@ -158,6 +161,8 @@ async function loadParticipantTeam(userId) {
   updateRegistrationLinks();
   document.querySelector("#profile-team-code").textContent =
     paymentSubmitted ? team.team_code || "—" : "Issued after payment submission";
+  document.querySelector("#profile-registration-type").textContent =
+    team.registration_type === "internal" ? "Internal · Free" : "External";
   document.querySelector("#profile-team-registered").textContent =
     team.created_at ? new Date(team.created_at).toLocaleString() : "—";
   if (!paymentSubmitted && team.is_team_contact) {
@@ -203,15 +208,17 @@ async function loadParticipantTeam(userId) {
   document.querySelector("#profile-team-checkin").textContent = team.checked_in_at
     ? `Checked in at ${new Date(team.checked_in_at).toLocaleString()}`
     : "Not checked in";
-  document.querySelector("#profile-note").textContent = team.payment_status === "awaiting_payment"
-    ? team.is_team_contact
-      ? "Your team details are saved, but registration is incomplete. Submit the UTR and payment screenshot below to complete registration."
-      : "Your team details are saved, but registration is incomplete until the team leader submits the UTR and payment screenshot."
-    : team.payment_status === "pending_review"
-      ? "Your registration is saved. Payment proof is waiting for admin review."
-      : team.payment_status === "approved"
-        ? "Your registration is confirmed. Your team check-in status is shown below."
-        : "Your registration and payment need attention. Check the details below.";
+  document.querySelector("#profile-note").textContent = team.payment_status === "not_required"
+    ? "Your internal registration is confirmed. No payment is required."
+    : team.payment_status === "awaiting_payment"
+      ? team.is_team_contact
+        ? "Your team details are saved, but registration is incomplete. Submit the UTR and payment screenshot below to complete registration."
+        : "Your team details are saved, but registration is incomplete until the team leader submits the UTR and payment screenshot."
+      : team.payment_status === "pending_review"
+        ? "Your registration is saved. Payment proof is waiting for admin review."
+        : team.payment_status === "approved"
+          ? "Your registration is confirmed. Your team check-in status is shown below."
+          : "Your registration and payment need attention. Check the details below.";
 
   const memberList = document.querySelector("#profile-team-members");
   memberList.replaceChildren();
@@ -221,7 +228,12 @@ async function loadParticipantTeam(userId) {
     const name = document.createElement("strong");
     name.textContent = `${member.full_name}${member.is_team_contact ? " · Team leader" : ""}`;
     const details = document.createElement("span");
-    details.textContent = `${member.college_name} · ${member.email} · ${member.mobile_number}`;
+    details.textContent = [
+      member.college_name,
+      member.email,
+      member.mobile_number,
+      member.register_number ? `Register no. ${member.register_number}` : "",
+    ].filter(Boolean).join(" · ");
     row.append(name, details);
     memberList.append(row);
   }
@@ -256,7 +268,7 @@ async function loadParticipantTeam(userId) {
       proofContainer.hidden = false;
     }
   }
-  paymentCard.hidden = false;
+  paymentCard.hidden = team.payment_status === "not_required";
   document.querySelector("#profile-payment-edit-notice").hidden = !(
     team.is_team_contact === true &&
     Boolean(team.screenshot_path) &&
@@ -482,6 +494,7 @@ function renderMembers() {
   const previousValues = new Map(
     [...membersList.querySelectorAll("input")].map((input) => [input.id, input.value]),
   );
+  const isInternal = document.querySelector("#registration-type").value === "internal";
   membersList.innerHTML = "";
   for (let index = 0; index < memberCount; index += 1) {
     const card = document.createElement("section");
@@ -493,6 +506,7 @@ function renderMembers() {
         <div><label class="field-label" for="member-${index}-college">College name <span>*</span></label><input class="text-input" id="member-${index}-college" name="memberCollege" maxlength="160" required /></div>
         <div><label class="field-label" for="member-${index}-mobile">Mobile number <span>*</span></label><input class="text-input" id="member-${index}-mobile" name="memberMobile" type="tel" inputmode="tel" autocomplete="tel" minlength="7" maxlength="18" title="Enter a valid mobile number" required /></div>
         <div><label class="field-label" for="member-${index}-email">Email address <span>*</span></label><input class="text-input" id="member-${index}-email" name="memberEmail" type="email" autocomplete="email" maxlength="254" required /></div>
+        <div class="register-number-field" ${isInternal ? "" : "hidden"}><label class="field-label" for="member-${index}-register-number">Register number <span>*</span></label><input class="text-input" id="member-${index}-register-number" name="memberRegisterNumber" maxlength="40" autocomplete="off" placeholder="College register number" ${isInternal ? "required" : "disabled"} /></div>
       </div>`;
     membersList.append(card);
   }
@@ -507,6 +521,14 @@ function renderMembers() {
   document.querySelector("#member-count").textContent = `${memberCount} / ${MAX_MEMBER_COUNT}`;
   document.querySelector("#add-member").disabled = memberCount >= MAX_MEMBER_COUNT;
   document.querySelector("#remove-member").disabled = memberCount <= INITIAL_MEMBER_COUNT;
+  const submitButton = document.querySelector("#team-form-submit");
+  submitButton.innerHTML = isInternal
+    ? "Complete free registration <span>↗</span>"
+    : "Continue to payment <span>→</span>";
+  const stepIndicator = document.querySelector("#team-form-step");
+  if (stepIndicator) {
+    stepIndicator.textContent = isInternal ? "INTERNAL REGISTRATION" : "STEP 01 / 02";
+  }
 }
 
 function refreshRegistrationState() {
@@ -547,7 +569,7 @@ function refreshRegistrationState() {
   }
 
   if (participantUser && participantTeamStatus === "registered") {
-    alreadyRegistered.hidden = false;
+    alreadyRegistered.hidden = !successPanel.hidden;
     return;
   }
 
@@ -559,8 +581,8 @@ function refreshRegistrationState() {
       incompleteRegistration.querySelector("p").textContent =
         "Submit your UTR and payment screenshot from your profile to complete registration.";
     }
-    incompleteRegistration.hidden = Boolean(draftTeam);
-    paymentForm.hidden = !draftTeam;
+    incompleteRegistration.hidden = Boolean(draftTeam) || !successPanel.hidden;
+    paymentForm.hidden = !draftTeam || !successPanel.hidden;
     return;
   }
 
@@ -621,11 +643,15 @@ function getMembersFromForm() {
   const colleges = values.getAll("memberCollege");
   const mobiles = values.getAll("memberMobile");
   const emails = values.getAll("memberEmail");
+  const isInternal = values.get("registrationType") === "internal";
   return names.map((name, index) => ({
     name: String(name).trim(),
     college: String(colleges[index]).trim(),
     mobile: String(mobiles[index]).trim(),
     email: String(emails[index]).trim(),
+    registerNumber: isInternal
+      ? document.querySelector(`#member-${index}-register-number`).value.trim()
+      : null,
   }));
 }
 
@@ -640,11 +666,15 @@ function validateTeamFormFields() {
 
   const emailInputs = [...teamForm.querySelectorAll('input[name="memberEmail"]')];
   const normalizedEmails = emailInputs.map((input) => input.value.trim().toLowerCase());
+  const isInternal = document.querySelector("#registration-type").value === "internal";
+  const registerInputs = isInternal ? [...teamForm.querySelectorAll('input[name="memberRegisterNumber"]')] : [];
+  const normalizedRegisterNumbers = registerInputs.map((input) => input.value.trim().toLowerCase());
   for (let index = 0; index < memberCount; index += 1) {
     const nameInput = document.querySelector(`#member-${index}-name`);
     const collegeInput = document.querySelector(`#member-${index}-college`);
     const mobileInput = document.querySelector(`#member-${index}-mobile`);
     const emailInput = emailInputs[index];
+    const registerNumberInput = document.querySelector(`#member-${index}-register-number`);
     const name = nameInput.value.trim();
     const college = collegeInput.value.trim();
     const mobile = mobileInput.value.trim();
@@ -675,6 +705,16 @@ function validateTeamFormFields() {
           ? "The team leader's email must match the signed-in account."
           : "",
     );
+    if (registerNumberInput && !registerNumberInput.disabled) {
+      const registerNumber = registerNumberInput.value.trim();
+      registerNumberInput.setCustomValidity(
+        registerNumber.length === 0 || registerNumber.length > 40
+          ? "Enter this member's register number (up to 40 characters)."
+          : registerNumber !== "" && normalizedRegisterNumbers.indexOf(registerNumber.toLowerCase()) !== index
+            ? "Each team member must provide a unique register number."
+          : "",
+      );
+    }
   }
 
   return teamForm.checkValidity();
@@ -682,6 +722,11 @@ function validateTeamFormFields() {
 
 teamForm.addEventListener("input", (event) => {
   if (event.target instanceof HTMLInputElement) validateTeamFormFields();
+});
+
+document.querySelector("#registration-type").addEventListener("change", () => {
+  renderMembers();
+  validateTeamFormFields();
 });
 
 function resetRegistrationForm() {
@@ -774,11 +819,13 @@ teamForm.addEventListener("submit", async (event) => {
   try {
     const { data: teamId, error } = await supabase.rpc("ideaforge_register_team", {
       p_team_name: String(new FormData(teamForm).get("teamName")).trim(),
+      p_registration_type: String(new FormData(teamForm).get("registrationType")),
       p_members: members.map((member) => ({
         full_name: member.name,
         college_name: member.college,
         mobile_number: member.mobile,
         email: member.email,
+        register_number: member.registerNumber,
       })),
     });
 
@@ -812,13 +859,38 @@ teamForm.addEventListener("submit", async (event) => {
     submitButton.innerHTML = submitButton.dataset.originalText;
   }
 
+  teamForm.hidden = true;
+  if (String(new FormData(teamForm).get("registrationType")) === "internal") {
+    document.querySelector("#success-message").textContent =
+      `${draftTeam.teamName} is registered as an internal team. Your registration is free.`;
+    const registrationCodeWrap = document.querySelector("#success-registration-wrap");
+    registrationCodeWrap.hidden = true;
+    try {
+      const { data: registeredTeam, error: teamProfileError } = await supabase.rpc(
+        "ideaforge_get_my_team",
+      );
+      if (teamProfileError) {
+        console.error("Could not load the new team's registration code.", teamProfileError);
+      } else if (registeredTeam?.team_code) {
+        document.querySelector("#success-registration-code").textContent =
+          registeredTeam.team_code;
+        registrationCodeWrap.hidden = false;
+      }
+    } catch (error) {
+      console.error("Could not load the new team's registration code.", error);
+    }
+    draftTeam = null;
+    successPanel.hidden = false;
+    if (participantUser) void loadParticipantTeam(participantUser.id);
+    successPanel.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   document.querySelector("#payment-team-summary").textContent =
     `${draftTeam.teamName} · ${members.length} members · Team contact: ${members[0].name}`;
   const paymentAmountEl = document.querySelector("#payment-amount");
   if (paymentAmountEl) {
     paymentAmountEl.textContent = `₹${members.length * 99}`;
   }
-  teamForm.hidden = true;
   paymentForm.hidden = false;
   paymentForm.scrollIntoView({ behavior: "smooth", block: "center" });
 });
@@ -1014,6 +1086,7 @@ function setAdminPage(pageName) {
     "deleted-history": ["Deleted history", "Review historical registration removals."],
     "email-queue": ["Email queue", "Review queued confirmations and retry eligible failures."],
     "qr-toggle": ["QR scanner toggle", "Control whether participants can access profile check-in scanning."],
+    "qr-display": ["Display check-in QR", "Active check-in QR code for participant profile scanners."],
     events: ["Events", "Event registration and operations overview."],
   };
   const pageSections = {
@@ -1029,6 +1102,7 @@ function setAdminPage(pageName) {
     emails: "emails",
     "email-queue": "emails",
     "qr-toggle": "checkin-toggle",
+    "qr-display": "qr-display",
     "deleted-history": "deleted-history",
   };
   const sectionName = pageSections[pageName] ?? "overview";
@@ -1063,9 +1137,11 @@ async function renderAdmin() {
   activeAdmin = null;
   const emailQueueRoute = isEmailQueueRoute();
   const checkinToggleRoute = isCheckinToggleRoute();
+  const qrDisplayRoute = isQrDisplayRoute();
   adminView.classList.toggle("admin-email-only", emailQueueRoute);
-  adminView.classList.toggle("admin-nested-route", emailQueueRoute || checkinToggleRoute);
+  adminView.classList.toggle("admin-nested-route", emailQueueRoute || checkinToggleRoute || qrDisplayRoute);
   adminView.classList.toggle("admin-checkin-toggle-only", checkinToggleRoute);
+  adminView.classList.toggle("admin-qr-display-only", qrDisplayRoute);
   setAdminAuthenticated(false);
   loginPanel.hidden = true;
   dashboard.hidden = true;
@@ -1122,12 +1198,16 @@ async function renderAdmin() {
   document.querySelector("#admin-account-avatar").textContent =
     nameParts.slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "AD";
   setAdminAuthenticated(true);
-  document.querySelector("#toggle-registration").hidden = emailQueueRoute || checkinToggleRoute;
+  document.querySelector("#toggle-registration").hidden = emailQueueRoute || checkinToggleRoute || qrDisplayRoute;
   signOutButton.hidden = false;
   dashboard.hidden = false;
-  setAdminPage(checkinToggleRoute ? "qr-toggle" : emailQueueRoute ? "email-queue" : "overview");
+  setAdminPage(qrDisplayRoute ? "qr-display" : checkinToggleRoute ? "qr-toggle" : emailQueueRoute ? "email-queue" : "overview");
   await loadAdminDashboard();
   if (activeAdmin && checkinToggleRoute) await loadAdminCheckinToggle();
+  if (activeAdmin && qrDisplayRoute) {
+    const qrBtn = document.querySelector("#create-checkin-qr");
+    if (qrBtn && !qrBtn.disabled) qrBtn.click();
+  }
 }
 
 async function loadAdminCheckinToggle() {
@@ -1168,7 +1248,7 @@ async function loadAdminDashboard() {
       .single(),
     supabase
       .from("ideaforge_teams")
-      .select("id, team_name, team_code, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, is_team_contact)")
+      .select("id, team_name, team_code, registration_type, payment_status, payment_utr, screenshot_path, created_at, payment_submitted_at, checked_in_at, ideaforge_members(id, full_name, college_name, mobile_number, register_number, is_team_contact)")
       .order("created_at", { ascending: false }),
   ]);
 
@@ -1183,9 +1263,7 @@ async function loadAdminDashboard() {
     return;
   }
   const teams = teamsResult.data ?? [];
-  const registeredTeams = teams.filter(
-    (team) => team.payment_status !== "awaiting_payment" && Boolean(team.screenshot_path),
-  );
+  const registeredTeams = teams.filter((team) => team.payment_status !== "awaiting_payment");
   adminTeamsData = registeredTeams;
   renderAdminCheckinSearch();
   const membersCount = registeredTeams.reduce(
@@ -1220,7 +1298,9 @@ async function loadAdminDashboard() {
 
   const list = document.querySelector("#admin-team-list");
   list.replaceChildren();
-  const paymentTeams = registeredTeams;
+  const paymentTeams = registeredTeams.filter(
+    (team) => team.registration_type !== "internal" && team.payment_status !== "not_required"
+  );
   document.querySelector("#admin-payment-count").textContent =
     `${paymentTeams.length} payment submission${paymentTeams.length === 1 ? "" : "s"}`;
 
@@ -1231,6 +1311,7 @@ async function loadAdminDashboard() {
       pending_review: "PENDING",
       approved: "PAID",
       rejected: "RE-UPLOAD REQUESTED",
+      not_required: "FREE · INTERNAL",
     };
     const isPending = team.payment_status === "pending_review";
     let screenshotUrl = null;
@@ -1249,10 +1330,12 @@ async function loadAdminDashboard() {
     const membersHtml = members.map((member) => `
       <div class="admin-member-row">
         <strong>${escapeHtml(member.full_name)}${member.is_team_contact ? " · Team contact" : ""}</strong>
-        <span>${escapeHtml(member.college_name)} · ${escapeHtml(member.mobile_number)}</span>
+        <span>${escapeHtml(member.college_name)} · ${escapeHtml(member.mobile_number)}${member.register_number ? ` · Register no. ${escapeHtml(member.register_number)}` : ""}</span>
       </div>`).join("");
     const teamContact = members.find((member) => member.is_team_contact) ?? members[0];
-    const paymentHtml = team.payment_utr
+    const paymentHtml = team.payment_status === "not_required"
+      ? '<span class="prototype-note">Free · No payment required</span>'
+      : team.payment_utr
       ? `<span class="utr-value">${escapeHtml(team.payment_utr)}</span>
          ${screenshotUrl
            ? `<button class="payment-proof-link" type="button" data-payment-proof data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.team_name)}" data-team-code="${escapeHtml(team.team_code)}" data-contact-name="${escapeHtml(teamContact?.full_name ?? "—")}" data-utr="${escapeHtml(team.payment_utr)}" data-submitted-at="${escapeHtml(team.payment_submitted_at ?? "")}" data-screenshot-url="${escapeHtml(screenshotUrl)}">▧ View screenshot</button>`
@@ -1263,13 +1346,13 @@ async function loadAdminDashboard() {
     card.dataset.paymentStatus = team.payment_status;
     card.innerHTML = `
       <div class="admin-payment-row">
-        <div class="payment-team-cell"><strong>${escapeHtml(team.team_name)}</strong><span>${escapeHtml(team.team_code)}</span></div>
+        <div class="payment-team-cell"><strong>${escapeHtml(team.team_name)}</strong><span>${escapeHtml(team.team_code)} · ${team.registration_type === "internal" ? "Internal" : "External"}</span></div>
         <div class="payment-contact-cell"><strong>${escapeHtml(teamContact?.full_name ?? "—")}</strong></div>
         <div class="payment-proof-cell">${paymentHtml}</div>
-        <div><span class="status-pill ${team.payment_status === "approved" ? "approved" : team.payment_status === "rejected" ? "reupload-requested" : ""}">${statusLabels[team.payment_status] ?? "UNKNOWN"}</span></div>
+        <div><span class="status-pill ${team.payment_status === "approved" || team.payment_status === "not_required" ? "approved" : team.payment_status === "rejected" ? "reupload-requested" : ""}">${statusLabels[team.payment_status] ?? "UNKNOWN"}</span></div>
         <div class="payment-date-cell">${team.payment_submitted_at ? new Date(team.payment_submitted_at).toLocaleString() : "—"}</div>
         <div class="admin-payment-actions">
-          ${isPending ? `<button class="small-button approve" type="button" data-action="approve" data-team-id="${escapeHtml(team.id)}">✓ Mark paid</button><button class="small-button request-reupload" type="button" data-action="request-reupload" data-team-id="${escapeHtml(team.id)}">↻ Request re-upload</button>` : team.payment_status === "approved" ? '<span class="payment-action-complete">✓ Payment verified</span>' : ""}
+          ${isPending ? `<button class="small-button approve" type="button" data-action="approve" data-team-id="${escapeHtml(team.id)}">✓ Mark paid</button><button class="small-button request-reupload" type="button" data-action="request-reupload" data-team-id="${escapeHtml(team.id)}">↻ Request re-upload</button>` : team.payment_status === "approved" ? '<span class="payment-action-complete">✓ Payment verified</span>' : team.payment_status === "not_required" ? '<span class="payment-action-complete">✓ No payment required</span>' : ""}
         </div>
         <details class="admin-payment-details">
           <summary>Team details</summary>
@@ -1294,12 +1377,13 @@ function renderAdminUsers(teams) {
 
   list.innerHTML = teams.map((team) => {
     const members = team.ideaforge_members ?? [];
-    const teamSearch = `${team.team_name} ${team.team_code} ${team.payment_status}`.toLowerCase();
+    const teamSearch = `${team.team_name} ${team.team_code} ${team.registration_type} ${team.payment_status}`.toLowerCase();
     const memberRows = members.map((member) => {
       const searchText = [
         member.full_name,
         member.college_name,
         member.mobile_number,
+        member.register_number,
       ].join(" ").toLowerCase();
       return `<article class="admin-user-row" data-search="${escapeHtml(searchText)}">
         <div class="admin-user-identity">
@@ -1307,7 +1391,7 @@ function renderAdminUsers(teams) {
           <div><strong>${escapeHtml(member.full_name)}</strong>${member.is_team_contact ? '<span class="admin-team-leader">TEAM LEADER</span>' : ""}</div>
         </div>
         <div class="admin-user-contact"><span>${escapeHtml(member.mobile_number)}</span></div>
-        <div class="admin-user-college">${escapeHtml(member.college_name)}</div>
+        <div class="admin-user-college">${escapeHtml(member.college_name)}${member.register_number ? `<span class="admin-user-register-number">Register no. ${escapeHtml(member.register_number)}</span>` : ""}</div>
       </article>`;
     }).join("");
     const paymentStatus = team.payment_status ?? "unknown";
@@ -1319,7 +1403,7 @@ function renderAdminUsers(teams) {
         </div>
         <div class="admin-user-team-meta">
           <span class="admin-user-team-size">${members.length} member${members.length === 1 ? "" : "s"}</span>
-          <span class="status-pill ${paymentStatus === "approved" ? "approved" : paymentStatus === "rejected" ? "reupload-requested" : ""}">${escapeHtml(paymentStatus.replaceAll("_", " "))}</span>
+          <span class="status-pill ${paymentStatus === "approved" || paymentStatus === "not_required" ? "approved" : paymentStatus === "rejected" ? "reupload-requested" : ""}">${escapeHtml(paymentStatus === "not_required" ? "free · internal" : paymentStatus.replaceAll("_", " "))}</span>
         </div>
       </header>
       <div class="admin-user-team-members">${memberRows || '<p class="admin-user-no-members">No participant details available.</p>'}</div>
@@ -1879,7 +1963,7 @@ function renderAdminCheckinSearch() {
   if (!query) {
     const hint = document.createElement("p");
     hint.className = "prototype-note";
-    hint.textContent = "Search by team name, team code, participant name, or phone.";
+    hint.textContent = "Search by team name, team code, participant name, register no, or phone.";
     results.append(hint);
     return;
   }
@@ -1889,7 +1973,9 @@ function renderAdminCheckinSearch() {
     const searchable = [
       team.team_name,
       team.team_code,
+      team.registration_type,
       ...members.flatMap((member) => [
+        member.register_number,
         member.full_name,
         member.mobile_number,
         member.college_name,
@@ -2011,12 +2097,16 @@ function isEmailQueueRoute() {
 }
 
 function isCheckinToggleRoute() {
-  return window.location.pathname.replace(/\/+$/, "").endsWith("/wasd4381/email/qrtoggle");
+  return window.location.pathname.replace(/\/+$/, "").toLowerCase().endsWith("/wasd4381/email/qrtoggle");
+}
+
+function isQrDisplayRoute() {
+  return window.location.pathname.replace(/\/+$/, "").toLowerCase().endsWith("/wasd4381/qr");
 }
 
 function isAdminRoute() {
-  const path = window.location.pathname.replace(/\/+$/, "");
-  return path.endsWith("/wasd4381") || isEmailQueueRoute() || isCheckinToggleRoute() ||
+  const path = window.location.pathname.replace(/\/+$/, "").toLowerCase();
+  return path.endsWith("/wasd4381") || isEmailQueueRoute() || isCheckinToggleRoute() || isQrDisplayRoute() ||
     window.location.search === "?admin=wasd4381" ||
     window.location.hash === "#admin";
 }
@@ -2026,8 +2116,9 @@ function renderRoute() {
   publicView.hidden = admin;
   adminView.hidden = !admin;
   adminView.classList.toggle("admin-email-only", isEmailQueueRoute());
-  adminView.classList.toggle("admin-nested-route", isEmailQueueRoute() || isCheckinToggleRoute());
+  adminView.classList.toggle("admin-nested-route", isEmailQueueRoute() || isCheckinToggleRoute() || isQrDisplayRoute());
   adminView.classList.toggle("admin-checkin-toggle-only", isCheckinToggleRoute());
+  adminView.classList.toggle("admin-qr-display-only", isQrDisplayRoute());
   if (admin) {
     void renderAdmin();
     return;
@@ -2036,6 +2127,7 @@ function renderRoute() {
   stopParticipantCheckinScanner();
   const isProfile = window.location.hash === "#profile";
   profilePage.hidden = !isProfile;
+  if (isProfile) successPanel.hidden = true;
   if (isProfile && participantUser) {
     void loadParticipantTeam(participantUser.id);
   }

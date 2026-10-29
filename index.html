@@ -257,7 +257,7 @@
               </div>
               <form id="team-form" hidden>
                 <div class="form-heading">
-                  <div><span class="form-overline">STEP 01 / 02</span><h3>Team details</h3></div>
+                  <div><span class="form-overline" id="team-form-step">STEP 01 / 02</span><h3>Team details</h3></div>
                   <span class="required-note">* REQUIRED</span>
                 </div>
                 <label class="field-label" for="team-name">Team name <span>*</span></label>
@@ -364,6 +364,8 @@
           <button class="admin-nav-button" type="button" data-admin-main-page data-admin-page="deleted-history"><span aria-hidden="true">◷</span> Deleted History</button>
           <a class="admin-nav-button" data-admin-route="email-queue" data-admin-nested-route href="/wasd4381/email"><span aria-hidden="true">✉</span> Delivery Queue</a>
           <a class="admin-nav-button" data-admin-route="qr-toggle" data-admin-nested-route href="/wasd4381/email/qrtoggle"><span aria-hidden="true">◉</span> QR scanner toggle</a>
+          <a class="admin-nav-button" data-admin-route="qr-display" data-admin-main-page href="/wasd4381/QR"><span aria-hidden="true">▣</span> Display QR</a>
+          <a class="admin-nav-button" data-admin-route="qr-display" data-admin-nested-route href="/wasd4381/QR"><span aria-hidden="true">▣</span> Display QR</a>
           <button class="admin-nav-button" type="button" data-admin-main-page data-admin-page="events"><span aria-hidden="true">▦</span> Events</button>
         </nav>
         <div class="admin-sidebar-status"><span class="pulse-dot"></span><div><strong>SYSTEM ACTIVE</strong><span>Event Command Center</span><small>IDEAFORGE ADMIN</small></div></div>
@@ -438,9 +440,11 @@
             <div class="checkin-layout">
               <div class="checkin-scanner">
                 <p class="eyebrow">PARTICIPANT SELF CHECK-IN</p>
-                <canvas id="admin-checkin-qr" aria-label="Temporary participant check-in QR code" hidden></canvas>
-                <button class="small-button approve" id="create-checkin-qr" type="button">Display check-in QR</button>
-                <p class="prototype-note" id="admin-checkin-qr-message" role="status">The QR expires after five minutes. Participants must sign in and scan it from their profile.</p>
+                <p class="admin-helper-copy">The active event check-in QR is displayed on its dedicated screen for kiosks and arrival projectors.</p>
+                <div class="checkin-scanner-actions">
+                  <a class="small-button approve" href="/wasd4381/QR">Display check-in QR ↗</a>
+                </div>
+                <p class="prototype-note">Open <code>/wasd4381/QR</code> to display the live check-in QR.</p>
               </div>
               <div class="checkin-form">
                 <label class="field-label" for="checkin-search">Search team or participant</label>
@@ -448,6 +452,20 @@
                 <div class="checkin-result" id="checkin-result" role="status" aria-live="polite" hidden></div>
                 <div class="checkin-search-results" id="checkin-search-results" aria-live="polite"></div>
               </div>
+            </div>
+          </section>
+          <section class="admin-page admin-registrations" id="admin-qr-display-page" hidden>
+            <div class="admin-table-heading">
+              <div><p class="eyebrow">EVENT ARRIVAL / ENTRANCE DISPLAY</p><h2>Participant check-in QR</h2></div>
+              <div class="admin-table-actions"><a class="small-button" href="/wasd4381">Return to dashboard</a></div>
+            </div>
+            <p class="admin-helper-copy">Display this screen at the arrival entrance or projector. Authenticated team members scan this QR code with their mobile device from their profile to mark their whole team present.</p>
+            <div class="qr-display-card">
+              <canvas id="admin-checkin-qr" aria-label="Temporary participant check-in QR code" hidden></canvas>
+              <div class="qr-display-actions">
+                <button class="small-button approve" id="create-checkin-qr" type="button">Display check-in QR</button>
+              </div>
+              <p class="prototype-note" id="admin-checkin-qr-message" role="status">The QR expires after five minutes. Participants must sign in and scan it from their profile.</p>
             </div>
           </section>
           <section class="admin-page admin-registrations" id="admin-emails-page" hidden>

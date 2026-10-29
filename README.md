@@ -112,6 +112,13 @@ Apply
 after the require-payment migration to remove codes from existing unpaid team
 drafts and assign codes only when payment proof is submitted.
 
+Apply
+[`supabase/migrations/20261028210000_ideaforge_internal_free_registration.sql`](./supabase/migrations/20261028210000_ideaforge_internal_free_registration.sql)
+after the deferred-team-code migration to enable free internal team
+registrations. Internal teams must provide a unique register number for each
+member and receive a team code without submitting payment. External teams
+continue through the existing ₹99-per-member payment flow.
+
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)
 to require participant sign-in for team registration and match the team
