@@ -18,7 +18,7 @@ const supabase =
 
 const publicView = document.querySelector("#public-view");
 const adminView = document.querySelector("#admin-view");
-const profilePage = document.querySelector("#profile-page");
+const profilePage = document.querySelector("#profile, #profile-page");
 const teamForm = document.querySelector("#team-form");
 const paymentForm = document.querySelector("#payment-form");
 const successPanel = document.querySelector("#registration-success");
@@ -68,10 +68,12 @@ function clearOAuthTokensFromUrl() {
   const fragment = new URLSearchParams(window.location.hash.slice(1));
   if (!fragment.has("access_token") && !fragment.has("refresh_token")) return;
 
+  const participantIntent = sessionStorage.getItem("ideaforge_participant_intent");
+  const targetHash = participantIntent === "register" ? "#register" : "#profile";
   window.history.replaceState(
     window.history.state,
     document.title,
-    `${window.location.pathname}${window.location.search}`,
+    `${window.location.pathname}${window.location.search}${targetHash}`,
   );
 }
 
@@ -409,7 +411,7 @@ if (supabase) {
         }
         return;
       }
-      if (session && event === "SIGNED_IN") {
+      if (session) {
         if (sessionStorage.getItem("ideaforge_admin_intent") === "1") {
           sessionStorage.removeItem("ideaforge_admin_intent");
           window.location.pathname = "/wasd4381";
@@ -417,8 +419,18 @@ if (supabase) {
           window.location.hash = "";
           return;
         }
-        window.location.hash = "#profile";
-        return;
+        const participantIntent = sessionStorage.getItem("ideaforge_participant_intent");
+        if (participantIntent) {
+          sessionStorage.removeItem("ideaforge_participant_intent");
+          window.location.hash = participantIntent === "register" ? "#register" : "#profile";
+          renderRoute();
+          return;
+        }
+        if (event === "SIGNED_IN") {
+          window.location.hash = "#profile";
+          renderRoute();
+          return;
+        }
       }
       refreshRegistrationState();
     }, 0);
@@ -439,6 +451,13 @@ if (supabase) {
         window.location.pathname = "/wasd4381";
         window.location.search = "";
         window.location.hash = "";
+        return;
+      }
+      const participantIntent = sessionStorage.getItem("ideaforge_participant_intent");
+      if (data.session && participantIntent) {
+        sessionStorage.removeItem("ideaforge_participant_intent");
+        window.location.hash = participantIntent === "register" ? "#register" : "#profile";
+        renderRoute();
         return;
       }
       refreshRegistrationState();
@@ -754,33 +773,70 @@ document.querySelector("#add-member").addEventListener("click", () => {
   }
 });
 
-document.querySelector("#participant-google-sign-in").addEventListener("click", async (event) => {
+async function startParticipantGoogleSignIn(returnIntent = "profile") {
   if (!supabase) {
     showToast("Sign-in is not available because Supabase is not configured.");
     return;
   }
-  const button = event.currentTarget;
-  button.disabled = true;
-  button.textContent = "Opening Google…";
+  const buttons = document.querySelectorAll("#participant-google-sign-in, #registration-google-sign-in");
+  buttons.forEach((btn) => {
+    btn.disabled = true;
+    btn.textContent = "Opening Google…";
+  });
+  const profileLink = document.querySelector("#profile-nav-link");
+  if (profileLink && !participantUser) {
+    profileLink.textContent = "Opening Google…";
+  }
+  const goToSignInLink = document.querySelector("#go-to-sign-in-link");
+  if (goToSignInLink) {
+    goToSignInLink.textContent = "Opening Google…";
+  }
+
   try {
-    const redirectTo =
-      `${window.location.origin}${window.location.pathname}${window.location.search}`;
-    const { error } = await supabase.auth.signInWithOAuth({
+    sessionStorage.setItem("ideaforge_participant_intent", returnIntent);
+    const redirectTo = `${window.location.origin}/`;
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo },
+      options: {
+        redirectTo,
+        skipBrowserRedirect: true,
+      },
     });
     if (error) {
       console.error("Participant Google sign-in could not be started.", error);
-      showToast("Google sign-in could not be started. Please try again.");
+      sessionStorage.removeItem("ideaforge_participant_intent");
+      showToast(error.message || "Google sign-in could not be started. Please try again.");
+      buttons.forEach((btn) => {
+        btn.disabled = false;
+        btn.innerHTML = 'Continue with Google <span>↗</span>';
+      });
+      if (profileLink && !participantUser) {
+        profileLink.textContent = "Sign in / Profile";
+      }
+      if (goToSignInLink) {
+        goToSignInLink.innerHTML = 'Go to sign in <span>↗</span>';
+      }
+      return;
+    }
+    if (data?.url) {
+      window.location.assign(data.url);
     }
   } catch (error) {
     console.error("Unexpected error starting participant Google sign-in.", error);
-    showToast("Google sign-in could not be started. Please try again.");
-  } finally {
-    button.disabled = false;
-    button.innerHTML = 'Continue with Google <span>↗</span>';
+    sessionStorage.removeItem("ideaforge_participant_intent");
+    showToast(error instanceof Error ? error.message : "Google sign-in could not be started. Please try again.");
+    buttons.forEach((btn) => {
+      btn.disabled = false;
+      btn.innerHTML = 'Continue with Google <span>↗</span>';
+    });
+    if (profileLink && !participantUser) {
+      profileLink.textContent = "Sign in / Profile";
+    }
+    if (goToSignInLink) {
+      goToSignInLink.innerHTML = 'Go to sign in <span>↗</span>';
+    }
   }
-});
+}
 
 document.querySelector("#participant-sign-out").addEventListener("click", async () => {
   const { error } = await supabase.auth.signOut();
@@ -2131,14 +2187,87 @@ function renderRoute() {
   if (isProfile && participantUser) {
     void loadParticipantTeam(participantUser.id);
   }
-  for (const section of publicView.querySelectorAll("main > section:not(#profile-page)")) {
+  for (const section of publicView.querySelectorAll("main > section:not(#profile):not(#profile-page)")) {
     section.hidden = isProfile;
   }
-  if (!isProfile) refreshRegistrationState();
+  if (!isProfile) {
+    refreshRegistrationState();
+  }
+
+  if (isProfile) {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  } else if (window.location.hash && window.location.hash !== "#") {
+    const targetElement = document.querySelector(window.location.hash);
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: "smooth" });
+    }
+  }
 }
 
 window.addEventListener("popstate", renderRoute);
 window.addEventListener("hashchange", renderRoute);
+
+document.addEventListener("click", (event) => {
+  // 1. Any participant sign-in trigger:
+  // - "Continue with Google" button in registration notice (#registration-google-sign-in)
+  // - "Go to sign in" link in registration notice (#go-to-sign-in-link)
+  // - "Continue with Google" button on profile page (#participant-google-sign-in)
+  const signinButton = event.target.closest(
+    "#registration-google-sign-in, #go-to-sign-in-link, #registration-auth-required a, #registration-auth-required button, #participant-google-sign-in"
+  );
+  if (signinButton) {
+    event.preventDefault();
+    const isRegister = signinButton.id === "registration-google-sign-in" ||
+                       signinButton.id === "go-to-sign-in-link" ||
+                       Boolean(signinButton.closest("#registration-auth-required"));
+    void startParticipantGoogleSignIn(isRegister ? "register" : "profile");
+    return;
+  }
+
+  // 2. Topbar "Sign in / Profile" link:
+  // - If signed out: directly start Google sign-in!
+  // - If signed in: navigate to profile page!
+  const profileNavLink = event.target.closest("#profile-nav-link");
+  if (profileNavLink) {
+    event.preventDefault();
+    if (!participantUser) {
+      void startParticipantGoogleSignIn("profile");
+      return;
+    }
+    if (window.location.hash !== "#profile") {
+      window.location.hash = "#profile";
+    } else {
+      renderRoute();
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+    return;
+  }
+
+  // 3. Other links to #profile (e.g. "View your profile" when registered)
+  const profileAnchor = event.target.closest('a[href="#profile"]');
+  if (profileAnchor) {
+    event.preventDefault();
+    if (window.location.hash !== "#profile") {
+      window.location.hash = "#profile";
+    } else {
+      renderRoute();
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+    return;
+  }
+
+  // 4. Links to #register (e.g. from profile page)
+  const registerAnchor = event.target.closest('a[href="#register"]');
+  if (registerAnchor && window.location.hash === "#profile") {
+    event.preventDefault();
+    window.location.hash = "#register";
+    renderRoute();
+    const target = document.querySelector("#register");
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth" });
+    }
+  }
+});
 
 renderMembers();
 updateRegistrationLinks();
