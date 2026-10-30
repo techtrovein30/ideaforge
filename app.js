@@ -44,6 +44,7 @@ let participantCheckinScannerControls = null;
 let participantCheckinEnabled = false;
 let adminCheckinEnabled = false;
 let adminTeamsData = [];
+let registrationAvailability = null;
 
 function updateRegistrationLinks() {
   const isRegistered = participantTeamStatus === "registered";
@@ -588,6 +589,36 @@ function renderMembers() {
   }
 }
 
+function applyRegistrationAvailability() {
+  if (!registrationAvailability) return;
+  const closed = document.querySelector("#registration-closed");
+  const authRequired = document.querySelector("#registration-auth-required");
+  const anyOpen = registrationAvailability.internal || registrationAvailability.external;
+
+  let selectionCleared = false;
+  for (const card of document.querySelectorAll("[data-registration-card]")) {
+    const type = card.dataset.registrationCard;
+    const isOpen = Boolean(registrationAvailability[type]);
+    card.classList.toggle("is-closed", !isOpen);
+    const input = card.querySelector('input[name="registrationType"]');
+    if (!input) continue;
+    input.disabled = !isOpen;
+    if (!isOpen && input.checked) {
+      input.checked = false;
+      selectionCleared = true;
+    }
+  }
+  if (selectionCleared) {
+    updateRegistrationTypeSelection();
+    renderMembers();
+  }
+
+  closed.hidden = anyOpen;
+  authRequired.hidden = !anyOpen || Boolean(participantUser);
+  teamForm.hidden = !anyOpen || !participantUser || Boolean(draftTeam) || !successPanel.hidden;
+  paymentForm.hidden = !anyOpen || !participantUser || !draftTeam || !successPanel.hidden;
+}
+
 function refreshRegistrationState() {
   const setup = document.querySelector("#registration-setup");
   const configError = document.querySelector("#registration-config-error");
@@ -662,7 +693,7 @@ function refreshRegistrationState() {
 
   supabase
     .from("ideaforge_settings")
-    .select("registration_open")
+    .select("*")
     .eq("id", true)
     .single()
     .then(({ data, error }) => {
@@ -678,11 +709,11 @@ function refreshRegistrationState() {
         return;
       }
 
-      const isOpen = data.registration_open;
-      closed.hidden = isOpen || participantTeamStatus === "registered";
-      authRequired.hidden = !isOpen || Boolean(participantUser);
-      teamForm.hidden = !isOpen || !participantUser || Boolean(draftTeam) || !successPanel.hidden;
-      paymentForm.hidden = !isOpen || !participantUser || !draftTeam || !successPanel.hidden;
+      registrationAvailability = {
+        internal: data.registration_open_internal ?? data.registration_open,
+        external: data.registration_open_external ?? data.registration_open,
+      };
+      applyRegistrationAvailability();
     })
     .catch((error) => {
       window.clearTimeout(connectionTimeout);
@@ -1411,7 +1442,7 @@ async function renderAdmin() {
   document.querySelector("#admin-account-avatar").textContent =
     nameParts.slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join("") || "AD";
   setAdminAuthenticated(true);
-  document.querySelector("#toggle-registration").hidden = emailQueueRoute || checkinToggleRoute || qrDisplayRoute;
+  document.querySelector("#admin-registration-toggles").hidden = emailQueueRoute || checkinToggleRoute || qrDisplayRoute;
   signOutButton.hidden = false;
   dashboard.hidden = false;
   setAdminPage(qrDisplayRoute ? "qr-display" : checkinToggleRoute ? "qr-toggle" : emailQueueRoute ? "email-queue" : "overview");
@@ -1473,7 +1504,7 @@ async function loadAdminDashboard() {
   const [settingsResult, teamsResult] = await Promise.all([
     supabase
       .from("ideaforge_settings")
-      .select("registration_open")
+      .select("*")
       .eq("id", true)
       .single(),
     fetchAllAdminTeams(),
@@ -1521,9 +1552,16 @@ async function loadAdminDashboard() {
     renderAdminEmails(emailRows ?? [], registeredTeams);
   }
 
-  const toggle = document.querySelector("#toggle-registration");
-  toggle.textContent = settingsResult.data.registration_open ? "Close registration" : "Open registration";
-  toggle.dataset.open = String(settingsResult.data.registration_open);
+  const settings = settingsResult.data;
+  const availability = {
+    internal: settings.registration_open_internal ?? settings.registration_open,
+    external: settings.registration_open_external ?? settings.registration_open,
+  };
+  for (const type of ["internal", "external"]) {
+    const toggle = document.querySelector(`#toggle-registration-${type}`);
+    toggle.textContent = `${availability[type] ? "Close" : "Open"} ${type} registration`;
+    toggle.dataset.open = String(availability[type]);
+  }
 
   const list = document.querySelector("#admin-team-list");
   list.replaceChildren();
@@ -1906,37 +1944,51 @@ document.querySelector("#admin-sidebar-sign-out").addEventListener("click", () =
   document.querySelector("#admin-sign-out").click();
 });
 
-document.querySelector("#toggle-registration").addEventListener("click", async (event) => {
+async function toggleRegistrationType(button) {
   if (!activeAdmin) {
     showToast("Sign in with an approved admin account first.", true);
     return;
   }
-  const button = event.currentTarget;
+  const type = button.dataset.registrationType;
+  if (type !== "internal" && type !== "external") return;
+  const column = type === "internal" ? "registration_open_internal" : "registration_open_external";
+  const otherType = type === "internal" ? "external" : "internal";
   const nextOpen = button.dataset.open !== "true";
+  const otherOpen =
+    document.querySelector(`#toggle-registration-${otherType}`).dataset.open === "true";
   button.disabled = true;
   try {
     const { error } = await supabase
       .from("ideaforge_settings")
       .update({
-        registration_open: nextOpen,
+        [column]: nextOpen,
+        // Keep the legacy combined flag in sync for older clients.
+        registration_open: nextOpen || otherOpen,
         updated_at: new Date().toISOString(),
         updated_by: activeAdmin.id,
       })
       .eq("id", true);
     if (error) {
-      console.error("Could not update IdeaForge registration status.", error);
+      console.error(`Could not update ${type} registration status.`, error);
       showToast(error.message || "Could not update registration status.", true);
       return;
     }
     await loadAdminDashboard();
-    showToast(`Registration ${nextOpen ? "opened" : "closed"}.`, true);
+    showToast(
+      `${type === "internal" ? "Internal" : "External"} registration ${nextOpen ? "opened" : "closed"}.`,
+      true,
+    );
   } catch (error) {
     console.error("Unexpected error updating registration status.", error);
     showToast("Could not update registration status because of a network error.", true);
   } finally {
     button.disabled = false;
   }
-});
+}
+
+for (const toggle of document.querySelectorAll("[data-registration-type][id^='toggle-registration-']")) {
+  toggle.addEventListener("click", (event) => toggleRegistrationType(event.currentTarget));
+}
 
 async function deleteAdminTeam(button) {
   if (!activeAdmin) {

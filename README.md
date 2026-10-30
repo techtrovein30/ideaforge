@@ -128,6 +128,14 @@ deletion. Deleting a team archives a snapshot for **Deleted History**, removes
 the team, members, payment reviews, and confirmation-email rows, and returns the
 private proof paths so the admin console can also remove the stored screenshots.
 
+Apply
+[`supabase/migrations/20261030120000_ideaforge_separate_registration_toggles.sql`](./supabase/migrations/20261030120000_ideaforge_separate_registration_toggles.sql)
+after the delete-team migration to give internal and external registrations
+independent open/close controls. The admin console shows a separate **Close
+internal registration** and **Close external registration** button, the public
+form disables any closed participant type, and the registration function
+rejects new teams for a closed type even if the old combined flag is still open.
+
 After installing the base schema, apply
 [`supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql`](./supabase/migrations/20261026090000_ideaforge_require_participant_auth.sql)
 to require participant sign-in for team registration and match the team

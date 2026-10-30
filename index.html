@@ -64,6 +64,9 @@
                     <h3>Team members</h3>
                     <div id="profile-team-members"></div>
                   </section>
+                  <a class="profile-community-link" href="https://chat.whatsapp.com/FNZ8hTDSRKgE213TR1f8cU" target="_blank" rel="noopener noreferrer">
+                    Join the IdeaForge WhatsApp community <span aria-hidden="true">↗</span>
+                  </a>
                 </div>
                 <aside class="profile-team-qr-card" hidden>
                   <p class="eyebrow">EVENT CHECK-IN</p>
@@ -270,6 +273,7 @@
                   <div class="registration-type-options" role="radiogroup" aria-label="Registration type">
                     <label class="registration-type-card" data-registration-card="internal">
                       <input type="radio" name="registrationType" value="internal" required />
+                      <span class="registration-type-closed" aria-hidden="true">CLOSED</span>
                       <span class="registration-type-check" aria-hidden="true"></span>
                       <span class="registration-type-body">
                         <span class="registration-type-tags">
@@ -287,6 +291,7 @@
                     </label>
                     <label class="registration-type-card" data-registration-card="external">
                       <input type="radio" name="registrationType" value="external" required />
+                      <span class="registration-type-closed" aria-hidden="true">CLOSED</span>
                       <span class="registration-type-check" aria-hidden="true"></span>
                       <span class="registration-type-body">
                         <span class="registration-type-tags">
@@ -382,6 +387,16 @@
                   <div><strong id="success-registration-code"></strong><button class="icon-button" id="copy-registration-code" type="button" aria-label="Copy team registration code">▢</button></div>
                 </div>
                 <p class="prototype-note">Keep your team code safe. Your profile shows registration and attendance status.</p>
+                <div class="success-community">
+                  <div>
+                    <p class="eyebrow">NEXT STEP</p>
+                    <strong>Join the IdeaForge WhatsApp community</strong>
+                    <p>Get event updates, venue details, and announcements from the organizers.</p>
+                  </div>
+                  <a class="button button-primary" href="https://chat.whatsapp.com/FNZ8hTDSRKgE213TR1f8cU" target="_blank" rel="noopener noreferrer">
+                    Join WhatsApp group <span>↗</span>
+                  </a>
+                </div>
                 <div class="success-actions">
                   <a class="button button-primary" href="#profile">View your profile <span>↗</span></a>
                   <a class="button success-secondary-button" href="#home">Back to events</a>
@@ -457,7 +472,10 @@
         <div id="admin-dashboard" hidden>
           <div class="admin-heading">
             <div><p class="eyebrow">IDEAFORGE / EVENT CONTROL</p><h1 id="admin-page-title">Dashboard <span>overview</span></h1><p class="admin-page-description" id="admin-page-description">Here’s what’s happening with your hackathon today.</p></div>
-            <button class="button button-primary" id="toggle-registration" type="button">Loading…</button>
+            <div class="admin-registration-toggles" id="admin-registration-toggles">
+              <button class="button button-primary" id="toggle-registration-internal" type="button" data-registration-type="internal">Loading…</button>
+              <button class="button button-primary" id="toggle-registration-external" type="button" data-registration-type="external">Loading…</button>
+            </div>
           </div>
           <nav class="admin-nav" aria-label="Admin pages">
             <button class="admin-nav-button active" type="button" data-admin-page="overview">Overview &amp; payments</button>

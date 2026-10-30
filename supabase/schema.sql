@@ -12,13 +12,15 @@
 create table if not exists public.ideaforge_settings (
   id boolean primary key default true check (id),
   registration_open boolean not null default true,
+  registration_open_internal boolean not null default true,
+  registration_open_external boolean not null default true,
   participant_checkin_enabled boolean not null default false,
   updated_at timestamptz not null default now(),
   updated_by uuid references auth.users (id) on delete set null
 );
 
-insert into public.ideaforge_settings (id, registration_open)
-values (true, true)
+insert into public.ideaforge_settings (id, registration_open, registration_open_internal, registration_open_external)
+values (true, true, true, true)
 on conflict (id) do nothing;
 
 create table if not exists public.ideaforge_admins (
