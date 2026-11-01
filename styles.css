@@ -252,6 +252,9 @@ select.text-input { color-scheme: dark; }
 .registration-review-header h3 { margin: 6px 0 0; font-size: 20px; letter-spacing: -.03em; }
 .registration-review-body { padding: 16px 20px; overflow-y: auto; }
 .registration-review-warning { margin: 0 0 14px; color: #ffca52; font-size: 11px; line-height: 1.6; }
+.registration-completion-notice { display: grid; gap: 5px; margin: 0 0 14px; padding: 13px 15px; border: 1px solid rgba(255, 190, 74, .4); border-left: 3px solid #ffbd4a; background: rgba(255, 190, 74, .09); color: #e6d9c2; font-size: 12px; line-height: 1.55; }
+.registration-completion-notice strong { color: #ffcf78; }
+.registration-completion-notice span { color: #c9c0b5; }
 .review-row { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 12px; }
 .review-row span { color: #a8a09c; }
 .review-row strong { text-align: right; overflow-wrap: anywhere; }
@@ -272,6 +275,7 @@ select.text-input { color-scheme: dark; }
 .back-button { color: #b7afab; cursor: pointer; background: transparent; border: 0; font-size: 11px; }
 .back-button:hover { color: var(--orange); }
 .payment-team-summary { padding: 12px 14px; background: #1a1a1a; color: #c5beba; font-size: 11px; line-height: 1.7; border-left: 2px solid var(--red); }
+#payment-form .registration-completion-notice { margin-top: 16px; }
 .payment-qr { display: grid; justify-items: center; gap: 10px; margin-top: 18px; padding: 16px; border: 1px solid var(--line); background: #111; text-align: center; }
 .payment-qr .eyebrow { margin: 0; }
 .payment-qr img { display: block; width: min(100%, 420px); height: auto; background: #fff; }

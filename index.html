@@ -333,6 +333,7 @@
                 </header>
                 <div class="registration-review-body">
                   <p class="registration-review-warning" id="registration-review-warning"></p>
+                  <aside class="registration-completion-notice" id="registration-completion-notice" role="note"></aside>
                   <div id="registration-review-summary"></div>
                 </div>
                 <footer class="registration-review-footer">
@@ -346,6 +347,10 @@
                   <div><span class="form-overline">STEP 02 / 02</span><h3>Payment details</h3></div>
                   <button class="back-button" type="button" id="back-to-team">← Edit team</button>
                 </div>
+                <aside class="registration-completion-notice" role="note">
+                  <strong>Important: your place is not confirmed yet.</strong>
+                  <span>Team details alone do not reserve a slot. To complete your registration submission, enter your UTR and upload the payment screenshot. Slots are limited. Organizers will verify your payment after submission.</span>
+                </aside>
                 <div class="payment-team-summary" id="payment-team-summary"></div>
                 <div class="payment-amount">
                   <p class="eyebrow">AMOUNT TO PAY</p>
@@ -484,11 +489,15 @@
           </nav>
           <section class="admin-page" id="admin-overview-page">
             <div class="stats-grid">
-              <article class="stat-card"><span>REGISTERED TEAMS</span><strong id="total-teams">0</strong><small>All teams in the database</small></article>
+              <article class="stat-card"><span>REGISTERED TEAMS</span><strong id="total-teams">0</strong><small>Submitted registrations</small></article>
               <article class="stat-card"><span>PARTICIPANTS</span><strong id="total-members">0</strong><small>Across all teams</small></article>
               <article class="stat-card stat-card-pending"><span>PENDING PAYMENTS</span><strong id="pending-payments">0</strong><small>Awaiting verification</small></article>
               <article class="stat-card stat-card-checked"><span>TEAMS CHECKED IN</span><strong id="checked-in-teams">0</strong><small>Event attendance</small></article>
               <article class="stat-card stat-card-approved"><span>PAYMENTS APPROVED</span><strong id="approved-payments">0</strong><small>Confirmed registrations</small></article>
+              <article class="stat-card"><span>INTERNAL TEAMS</span><strong id="internal-teams">0</strong><small>Submitted internal registrations</small></article>
+              <article class="stat-card"><span>INTERNAL STUDENTS</span><strong id="internal-students">0</strong><small>Across internal teams</small></article>
+              <article class="stat-card"><span>EXTERNAL TEAMS</span><strong id="external-teams">0</strong><small>Payment submitted</small></article>
+              <article class="stat-card"><span>EXTERNAL STUDENTS</span><strong id="external-students">0</strong><small>Across external teams</small></article>
             </div>
             <section class="admin-registrations">
               <div class="admin-table-heading"><div><p class="eyebrow">QUICK ACCESS</p><h2>Event operations</h2></div></div>
@@ -500,11 +509,11 @@
             </section>
           </section>
           <section class="admin-page admin-registrations" id="admin-payments-page" hidden>
-            <div class="admin-table-heading"><div><p class="eyebrow">PAYMENT VERIFICATION</p><h2>Registrations &amp; payments</h2></div><span class="prototype-note" id="admin-payment-count">0 teams</span></div>
+            <div class="admin-table-heading"><div><p class="eyebrow" id="admin-list-eyebrow">REGISTRATION MANAGEMENT</p><h2 id="admin-list-title">Registrations</h2></div><span class="prototype-note" id="admin-payment-count" aria-live="polite">0 teams · 0 students</span></div>
             <div class="admin-toolbar">
               <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-payment-search" type="search" placeholder="Search team, code, contact, or UTR…" autocomplete="off" /></label>
-              <select class="text-input admin-filter" id="admin-payment-filter" aria-label="Filter payments">
-                <option value="all">All registrations</option><option value="awaiting_payment">Incomplete / no payment</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Re-upload requested</option><option value="not_required">Free · internal</option>
+              <select class="text-input admin-filter" id="admin-payment-filter" aria-label="Filter registrations by status">
+                <option value="all">All submitted registrations</option><option value="awaiting_payment">Incomplete / no payment</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Re-upload requested</option><option value="not_required">Free · internal</option>
               </select>
               <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter by team type">
                 <option value="all">All team types</option><option value="internal">Internal only</option><option value="external">External only</option>
@@ -516,7 +525,7 @@
               </div>
               <div id="admin-team-list" class="admin-team-list"></div>
             </div>
-            <div class="empty-state" id="admin-empty"><span>✳</span><strong>No registrations match this view</strong><p>Try a different status filter or search. Incomplete registrations appear under “Incomplete / no payment”.</p></div>
+            <div class="empty-state" id="admin-empty"><span>✳</span><strong>No registrations match this view</strong><p>Teams with submitted payment and free internal registrations are shown here.</p></div>
           </section>
           <section class="admin-page admin-registrations" id="admin-users-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div><span class="prototype-note" id="admin-user-count">0 participants</span></div>

@@ -44,6 +44,7 @@ let participantCheckinScannerControls = null;
 let participantCheckinEnabled = false;
 let adminCheckinEnabled = false;
 let adminTeamsData = [];
+let adminIncompleteTeams = [];
 let registrationAvailability = null;
 
 function updateRegistrationLinks() {
@@ -413,7 +414,9 @@ if (supabase) {
     participantAuthReady = true;
     window.setTimeout(() => {
       if (isAdminRoute()) {
-        if (!session || event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        const isNewAdminSession =
+          session && (!activeAdmin || activeAdmin.id !== session.user.id);
+        if (!session || isNewAdminSession || (event === "INITIAL_SESSION" && !activeAdmin)) {
           void renderAdmin();
         }
         return;
@@ -958,6 +961,9 @@ function renderRegistrationReview({ teamName, registrationType, members }) {
   document.querySelector("#registration-review-warning").textContent = isInternal
     ? `All ${members.length} members' details are required. Confirm only after checking every name, mobile number, email address, and register number. College name is set to SIMATS for internal teams.`
     : `All ${members.length} members' details are required. Confirm only after checking every name, college, mobile number, and email address.`;
+  document.querySelector("#registration-completion-notice").innerHTML = isInternal
+    ? "<strong>Important: slots are limited.</strong><span>Submitting your team details completes the free internal registration. Places are limited, so organizers may close registration when slots are filled.</span>"
+    : "<strong>Important: your place is not confirmed yet.</strong><span>Team details alone do not reserve a slot. To complete your registration submission, enter your UTR and upload the payment screenshot. Slots are limited. Organizers will verify your payment after submission.</span>";
   document.querySelector("#registration-review-summary").innerHTML = `
     <div class="review-row"><span>Team name</span><strong>${escapeHtml(teamName)}</strong></div>
     <div class="review-row"><span>Registration type</span><strong>${isInternal ? "Internal · SIMATS student (free)" : "External · Other college (₹99 per member)"}</strong></div>
@@ -1316,11 +1322,11 @@ function showAdminLogin(message, canSignOut = false) {
 function setAdminPage(pageName) {
   const pageDetails = {
     overview: ["Dashboard overview", "Here’s what’s happening with your hackathon today."],
-    payments: ["Payments", "Review registration details, payment references, and proofs."],
+    payments: ["Payments", "Review submitted payment references and proofs."],
     users: ["Registered users", "Find participants and see their team and payment status."],
     checkin: ["Team check-in", "Display a temporary check-in QR or search for a team manually."],
     emails: ["Gmail outbox", "Review queued confirmations and retry eligible failures."],
-    registrations: ["Registrations", "Review team registrations and payment status."],
+    registrations: ["Registrations", "Review submitted registrations and status counts."],
     students: ["Students", "Find participants and see their team and payment status."],
     teams: ["Teams", "Browse registered teams and their members."],
     reuploads: ["Re-uploads", "Review payment proofs that need a new upload."],
@@ -1362,6 +1368,23 @@ function setAdminPage(pageName) {
   document.querySelector("#admin-page-description").textContent = description;
   const paymentFilter = document.querySelector("#admin-payment-filter");
   if (sectionName === "payments") {
+    const registrationsMode = pageName === "registrations";
+    const listSection = document.querySelector("#admin-payments-page");
+    listSection.dataset.adminMode = pageName === "reuploads"
+      ? "reuploads"
+      : registrationsMode ? "registrations" : "payments";
+    document.querySelector("#admin-list-eyebrow").textContent =
+      registrationsMode ? "REGISTRATION MANAGEMENT" : "PAYMENT VERIFICATION";
+    document.querySelector("#admin-list-title").textContent =
+      registrationsMode ? "Registrations" : pageName === "reuploads" ? "Re-uploads" : "Payments";
+    document.querySelector("#admin-payment-filter").setAttribute(
+      "aria-label",
+      registrationsMode ? "Filter registrations by status" : "Filter payments by status",
+    );
+    document.querySelector("#admin-empty").querySelector("p").textContent =
+      registrationsMode
+        ? "Teams awaiting payment, payment submissions, and free internal registrations are shown here."
+        : "Payment submissions appear here for verification. Incomplete and free internal registrations are listed under Registrations.";
     paymentFilter.value = pageName === "reuploads" ? "rejected" : "all";
     filterAdminPayments();
   }
@@ -1521,24 +1544,30 @@ async function loadAdminDashboard() {
     return;
   }
   const teams = teamsResult.data ?? [];
+  adminIncompleteTeams = teams.filter((team) => team.payment_status === "awaiting_payment");
   const registeredTeams = teams.filter((team) => team.payment_status !== "awaiting_payment");
   adminTeamsData = registeredTeams;
   renderAdminCheckinSearch();
-  const membersCount = teams.reduce(
+  const membersCount = registeredTeams.reduce(
     (total, team) => total + (team.ideaforge_members?.length ?? 0),
     0,
   );
-  document.querySelector("#total-teams").textContent = String(teams.length);
+  document.querySelector("#total-teams").textContent = String(registeredTeams.length);
   document.querySelector("#total-members").textContent = String(membersCount);
+  for (const type of ["internal", "external"]) {
+    const typeTeams = registeredTeams.filter((team) => team.registration_type === type);
+    document.querySelector(`#${type}-teams`).textContent = String(typeTeams.length);
+    document.querySelector(`#${type}-students`).textContent = String(
+      typeTeams.reduce((total, team) => total + (team.ideaforge_members?.length ?? 0), 0),
+    );
+  }
   document.querySelector("#pending-payments").textContent =
     String(teams.filter((team) => team.payment_status === "pending_review").length);
   document.querySelector("#approved-payments").textContent =
     String(teams.filter((team) => team.payment_status === "approved").length);
   document.querySelector("#checked-in-teams").textContent =
     String(teams.filter((team) => team.checked_in_at).length);
-  // Show every team in the participant directory, including registrations that
-  // never reached payment, so abandoned rows can be reviewed or deleted.
-  renderAdminUsers(teams);
+  renderAdminUsers(registeredTeams);
   if (isEmailQueueRoute()) {
     const { data: emailRows, error: emailError } = await supabase
       .from("ideaforge_email_outbox")
@@ -1565,9 +1594,7 @@ async function loadAdminDashboard() {
 
   const list = document.querySelector("#admin-team-list");
   list.replaceChildren();
-  const paymentTeams = teams;
-  document.querySelector("#admin-payment-count").textContent =
-    `${paymentTeams.length} registration${paymentTeams.length === 1 ? "" : "s"}`;
+  const paymentTeams = registeredTeams;
 
   for (const team of paymentTeams) {
     const members = team.ideaforge_members ?? [];
@@ -1602,6 +1629,7 @@ async function loadAdminDashboard() {
     card.className = "admin-team-card";
     card.dataset.paymentStatus = team.payment_status;
     card.dataset.registrationType = team.registration_type ?? "";
+    card.dataset.memberCount = String(members.length);
     card.innerHTML = `
       <div class="admin-payment-row">
         <div class="payment-team-cell"><strong>${escapeHtml(team.team_name)}</strong><span>${escapeHtml(team.team_code)} · ${team.registration_type === "internal" ? "Internal" : "External"}</span></div>
@@ -1855,12 +1883,97 @@ function filterAdminPayments() {
   const query = document.querySelector("#admin-payment-search").value.trim().toLowerCase();
   const status = document.querySelector("#admin-payment-filter").value;
   const cards = [...document.querySelectorAll("#admin-team-list .admin-team-card")];
-  for (const card of cards) {
-    card.hidden = (status !== "all" && card.dataset.paymentStatus !== status) ||
-      (activeRegistrationTypeFilter !== "all" && card.dataset.registrationType !== activeRegistrationTypeFilter) ||
-      (query !== "" && !card.textContent.toLowerCase().includes(query));
+  const listMode = document.querySelector("#admin-payments-page").dataset.adminMode ?? "payments";
+  const registrationsMode = listMode === "registrations";
+  const statusLabels = {
+    awaiting_payment: "Incomplete / no payment",
+    pending_review: "Pending review",
+    approved: "Approved",
+    rejected: "Re-upload requested",
+    not_required: "Free · internal",
+  };
+  const visibleByTypeAndSearch = cards.filter((card) =>
+    (activeRegistrationTypeFilter === "all" ||
+      card.dataset.registrationType === activeRegistrationTypeFilter) &&
+    (query === "" || card.textContent.toLowerCase().includes(query)) &&
+    (registrationsMode ||
+      !["awaiting_payment", "not_required"].includes(card.dataset.paymentStatus)),
+  );
+  const statuses = registrationsMode
+    ? ["awaiting_payment", "pending_review", "approved", "rejected", "not_required"]
+    : ["pending_review", "approved", "rejected"];
+  const statusFilter = document.querySelector("#admin-payment-filter");
+  const currentStatus = statuses.includes(status) || status === "all" ? status : "all";
+  const matchingIncompleteTeams = adminIncompleteTeams.filter((team) => {
+    if (activeRegistrationTypeFilter !== "all" &&
+        team.registration_type !== activeRegistrationTypeFilter) return false;
+    if (!query) return true;
+    const searchable = [
+      team.team_name,
+      team.team_code,
+      ...(team.ideaforge_members ?? []).flatMap((member) => [
+        member.full_name,
+        member.email,
+        member.college_name,
+        member.mobile_number,
+      ]),
+    ].join(" ").toLowerCase();
+    return searchable.includes(query);
+  });
+  statusFilter.replaceChildren(new Option(
+    `${registrationsMode ? "All submitted registrations" : "All submitted payments"} (${visibleByTypeAndSearch.length})`,
+    "all",
+  ));
+  for (const paymentStatus of statuses) {
+    const count = paymentStatus === "awaiting_payment"
+      ? matchingIncompleteTeams.length
+      : visibleByTypeAndSearch.filter((card) => card.dataset.paymentStatus === paymentStatus).length;
+    statusFilter.add(new Option(`${statusLabels[paymentStatus]} (${count})`, paymentStatus));
   }
-  document.querySelector("#admin-empty").hidden = cards.some((card) => !card.hidden);
+  statusFilter.value = currentStatus;
+
+  let visibleTeams = 0;
+  let visibleStudents = 0;
+  const matchingCards = new Set(visibleByTypeAndSearch);
+  for (const card of cards) {
+    const hidden = (status !== "all" && card.dataset.paymentStatus !== status) ||
+      !matchingCards.has(card);
+    card.hidden = hidden;
+    if (!hidden) {
+      visibleTeams += 1;
+      visibleStudents += Number(card.dataset.memberCount);
+    }
+  }
+  if (status === "awaiting_payment" && registrationsMode) {
+    visibleTeams = matchingIncompleteTeams.length;
+    visibleStudents = matchingIncompleteTeams.reduce(
+      (total, team) => total + (team.ideaforge_members?.length ?? 0),
+      0,
+    );
+  }
+  document.querySelector("#admin-payment-count").textContent =
+    `${visibleTeams} team${visibleTeams === 1 ? "" : "s"} · ${visibleStudents} student${visibleStudents === 1 ? "" : "s"}`;
+  const emptyState = document.querySelector("#admin-empty");
+  emptyState.hidden = cards.some((card) => !card.hidden) ||
+    (status === "awaiting_payment" && matchingIncompleteTeams.length === 0);
+  emptyState.querySelector("strong").textContent =
+    status === "awaiting_payment" && registrationsMode && matchingIncompleteTeams.length > 0
+      ? "Incomplete registrations are counted only"
+      : listMode === "reuploads"
+        ? "No re-upload requests match this view"
+        : listMode === "payments"
+          ? "No payment submissions match this view"
+          : "No registrations match this view";
+  if (status === "awaiting_payment" && registrationsMode) {
+    emptyState.querySelector("p").textContent =
+      "Team and participant details remain hidden until the team submits its UTR and payment screenshot.";
+  } else if (registrationsMode) {
+    emptyState.querySelector("p").textContent =
+      "Teams with submitted payment and free internal registrations are shown here.";
+  } else {
+    emptyState.querySelector("p").textContent =
+      "Payment submissions appear here for verification. Incomplete and free internal registrations are listed under Registrations.";
+  }
 }
 
 function filterAdminEmails() {
