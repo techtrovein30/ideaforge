@@ -58,9 +58,9 @@ that authenticated participants scan from their profiles. Applying the
 participant check-in migration below is required for this feature. Apply
 [`supabase/migrations/20261026210000_ideaforge_admin_checkin.sql`](./supabase/migrations/20261026210000_ideaforge_admin_checkin.sql)
 after the base schema and email-confirmation migration. It assigns each team a
-unique code and adds admin-only check-in recording. The payment approval email
-includes the team code; redeploy the email-worker Edge Function after applying
-the migration.
+unique code and adds admin-only check-in recording. The registration
+confirmation email is sent to the team leader; redeploy the email-worker Edge
+Function after applying the migration.
 
 Apply
 [`supabase/migrations/20261026220000_ideaforge_payment_reupload.sql`](./supabase/migrations/20261026220000_ideaforge_payment_reupload.sql)
@@ -168,6 +168,15 @@ authorization must include the
 `https://www.googleapis.com/auth/gmail.send` scope. Existing Google sign-in
 OAuth should remain unchanged.
 
+If the outbox reports **Gmail rejected sender authorization**, check that
+`GMAIL_REFRESH_TOKEN` was issued by the same Gmail account configured in
+`IDEAFORGE_GMAIL_FROM` (or an authorized sender alias) and that the token was
+granted the `gmail.send` scope. If the scope was missing, reauthorize the Gmail
+sender with that scope and replace the refresh-token secret in Supabase; changing
+the admin Google sign-in settings does not fix Gmail sending. Deploy the updated
+email-worker function so its error details are shown in the outbox, then retry
+the failed message and send the paused queue.
+
 [`supabase/scheduler.sql`](./supabase/scheduler.sql) is a proposed pg_cron /
 pg_net / Vault setup, not an applied configuration. Verify those extensions
 and existing jobs in the target project before running it. Review eligible
@@ -181,6 +190,12 @@ The worker records Gmail API acceptance, which is not proof of inbox delivery.
 The Gmail outbox page can show and retry eligible failures. An admin can use
 **Send next batch now** to process currently due messages up to the configured
 batch limit. Automatic sending also requires the Edge Function and scheduler
-to be deployed and enabled.
+to be deployed and enabled. Confirmation emails are sent only to the team
+leader. A separate delivery status report with the team name/code, leader name
+and Gmail address, and Gmail acceptance time is sent to
+`suvedhansuveg14@gmail.com`; it does not include a copy of the confirmation.
+Gmail acceptance does not guarantee inbox delivery. **Export sent team data
+CSV** includes the team, leader name and Gmail address, member names and Gmail
+addresses, and delivery status.
 For the remaining activation steps and sender/OAuth setup requirements, see
 [URLs needed](./URLs%20needed.md).

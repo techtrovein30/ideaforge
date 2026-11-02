@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  buildDeliveryReport,
   buildPaymentConfirmation,
   type PaymentConfirmation,
 } from "./content.ts";
@@ -21,6 +22,7 @@ const WORKER_TOKEN = Deno.env.get("IDEAFORGE_EMAIL_WORKER_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const DELIVERY_REPORT_TO = "suvedhansuveg14@gmail.com";
 const BATCH_SIZE = Math.max(
   1,
   Math.min(Number.parseInt(Deno.env.get("IDEAFORGE_EMAIL_BATCH_SIZE") ?? "20", 10) || 20, 100),
@@ -169,17 +171,38 @@ Deno.serve(async (request) => {
       }
       const content = buildPaymentConfirmation({
         teamName: row.team_name,
-        teamCode: row.team_code,
         recipientName: row.recipient_name,
         memberNames: row.member_names ?? [],
       } satisfies PaymentConfirmation);
-      return await gmailSendMessage(GMAIL_CONFIG, tokenCache, {
+      const result = await gmailSendMessage(GMAIL_CONFIG, tokenCache, {
         fromEmail: GMAIL_CONFIG.fromEmail,
         fromName: GMAIL_CONFIG.fromName,
         toEmail: row.recipient_email,
         toName: row.recipient_name ?? "",
         ...content,
       });
+      const report = buildDeliveryReport({
+        teamName: row.team_name,
+        teamCode: row.team_code,
+        recipientName: row.recipient_name,
+        recipientEmail: row.recipient_email,
+        sentAt: new Date().toISOString(),
+      });
+      try {
+        await gmailSendMessage(GMAIL_CONFIG, tokenCache, {
+          fromEmail: GMAIL_CONFIG.fromEmail,
+          fromName: GMAIL_CONFIG.fromName,
+          toEmail: DELIVERY_REPORT_TO,
+          toName: "IdeaForge Admin",
+          ...report,
+        });
+      } catch (error) {
+        console.error(
+          "[ideaforge-email-worker] Confirmation was accepted by Gmail, but its admin delivery report could not be sent:",
+          safeError(error),
+        );
+      }
+      return result;
     },
     markSent: async (id, messageId) => {
       const { error } = await admin

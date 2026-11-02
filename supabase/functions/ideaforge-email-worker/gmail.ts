@@ -99,19 +99,49 @@ export function classifySendError(
   deliveryUncertain = false,
 ): GmailSendError {
   const normalized = body.toLowerCase();
+  let providerReason = "";
+  try {
+    const payload = JSON.parse(body) as {
+      error?: {
+        errors?: { reason?: string }[];
+        status?: string;
+      };
+    };
+    providerReason = payload.error?.errors?.[0]?.reason ??
+      payload.error?.status ??
+      "";
+  } catch {
+    // Providers may return plain text instead of a JSON error.
+  }
+  if (!/^[\w.-]{1,80}$/.test(providerReason)) providerReason = "";
+  const reason = providerReason.toLowerCase();
   if (normalized.includes("invalid_grant") || normalized.includes("invalid_client")) {
     return new GmailSendError("auth", status, "Gmail OAuth credentials were rejected.");
   }
   if (
     status === 429 ||
+    reason.includes("ratelimit") ||
+    reason.includes("dailylimit") ||
+    reason.includes("quota") ||
     normalized.includes("ratelimitexceeded") ||
     normalized.includes("quota") ||
     normalized.includes("daily limit")
   ) {
     return new GmailSendError("quota", status, "Gmail rate limit or quota reached.");
   }
-  if (status === 401 || status === 403) {
-    return new GmailSendError("auth", status, "Gmail rejected the sender authorization.");
+  if (status === 401) {
+    return new GmailSendError(
+      "auth",
+      status,
+      "Gmail rejected the access token; verify the OAuth credentials and refresh token.",
+    );
+  }
+  if (status === 403) {
+    const detail = providerReason ? ` (${providerReason})` : "";
+    const message = reason.includes("insufficientpermissions")
+      ? "Gmail authorization lacks the gmail.send permission. Reauthorize the sender account with the gmail.send scope, update GMAIL_REFRESH_TOKEN, and retry."
+      : "Gmail rejected sender authorization. Confirm GMAIL_REFRESH_TOKEN belongs to the account in IDEAFORGE_GMAIL_FROM (or an authorized sender alias) and was granted the gmail.send scope, then retry.";
+    return new GmailSendError("auth", status, `${message}${detail}`);
   }
   if (status >= 500) {
     return new GmailSendError(

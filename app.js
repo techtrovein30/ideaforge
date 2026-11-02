@@ -36,6 +36,7 @@ let toastTimer;
 let participantUser = null;
 let participantAuthReady = !supabase;
 let adminEmailsData = [];
+let adminEmailTeamsData = [];
 let activeEmailFilter = "all";
 let activeRegistrationTypeFilter = "all";
 let activeParticipantTeam = null;
@@ -1571,7 +1572,7 @@ async function loadAdminDashboard() {
   if (isEmailQueueRoute()) {
     const { data: emailRows, error: emailError } = await supabase
       .from("ideaforge_email_outbox")
-      .select("id, team_id, status, attempt_count, retryable, last_error, sent_at, recipient_email, recipient_name, created_at")
+      .select("id, team_id, status, attempt_count, retryable, last_error, sent_at, recipient_email, recipient_name, team_name, created_at")
       .order("created_at", { ascending: false });
     if (emailError) {
       console.error("Could not load IdeaForge delivery queue.", emailError);
@@ -1836,6 +1837,7 @@ function filterAdminDeletedHistory() {
 
 function renderAdminEmails(emails, teams) {
   adminEmailsData = emails;
+  adminEmailTeamsData = teams;
   const teamById = new Map(teams.map((team) => [team.id, team]));
   const list = document.querySelector("#admin-email-list");
   const statusLabels = {
@@ -1989,16 +1991,25 @@ function filterAdminEmails() {
 
 function exportSentEmails() {
   const sent = adminEmailsData.filter((email) => email.status === "sent");
+  const teamById = new Map(adminEmailTeamsData.map((team) => [team.id, team]));
   const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const rows = [
-    ["Recipient", "Name", "Status", "Attempts", "Sent at"],
-    ...sent.map((email) => [
-      email.recipient_email,
-      email.recipient_name,
-      email.status,
-      email.attempt_count,
-      email.sent_at,
-    ]),
+    ["Team", "Team code", "Team leader", "Leader Gmail", "Member names", "Member Gmail addresses", "Status", "Attempts", "Sent at"],
+    ...sent.map((email) => {
+      const team = teamById.get(email.team_id);
+      const members = team?.ideaforge_members ?? [];
+      return [
+        team?.team_name ?? email.team_name,
+        team?.team_code ?? "",
+        email.recipient_name,
+        email.recipient_email,
+        members.map((member) => member.full_name).join("; "),
+        members.map((member) => member.email).join("; "),
+        email.status,
+        email.attempt_count,
+        email.sent_at,
+      ];
+    }),
   ];
   const csv = rows.map((row) => row.map(quote).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));

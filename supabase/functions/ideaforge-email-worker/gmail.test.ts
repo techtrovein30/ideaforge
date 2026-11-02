@@ -46,6 +46,7 @@ describe("Gmail provider helpers", () => {
 
     expect(raw).toContain("From: IdeaForge <noreply@example.com>");
     expect(raw).toContain("To: Team Contact <team@example.com>");
+    expect(raw).not.toContain("\r\nBcc:");
     expect(raw).toContain("multipart/alternative");
     expect(() => buildRawMessage({
       fromEmail: "bad\r\nBcc: attacker@example.com",
@@ -63,6 +64,22 @@ describe("Gmail provider helpers", () => {
     expect(classifySendError(429, "rate limit").kind).toBe("quota");
     expect(classifySendError(503, "unavailable", true).deliveryUncertain).toBe(true);
     expect(classifySendError(400, "invalid message").kind).toBe("invalid");
+  });
+
+  it("explains Gmail sender authorization failures", () => {
+    const missingScope = classifySendError(
+      403,
+      '{"error":{"errors":[{"reason":"insufficientPermissions"}]}}',
+    );
+    const senderMismatch = classifySendError(
+      403,
+      '{"error":{"errors":[{"reason":"forbidden"}]}}',
+    );
+
+    expect(missingScope.message).toContain("lacks the gmail.send permission");
+    expect(missingScope.message).toContain("(insufficientPermissions)");
+    expect(senderMismatch.message).toContain("GMAIL_REFRESH_TOKEN belongs to the account");
+    expect(senderMismatch.message).toContain("(forbidden)");
   });
 
   it("allows safe retry when the OAuth token endpoint cannot be reached", async () => {

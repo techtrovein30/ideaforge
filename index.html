@@ -576,9 +576,9 @@
           </section>
           <section class="admin-page admin-registrations" id="admin-emails-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">GMAIL DELIVERY</p><h2>Confirmation outbox</h2></div></div>
-            <p class="admin-helper-copy">Payment approvals queue one confirmation for the team leader. Send queued now processes the next due batch; automatic sending also requires the Supabase scheduler to be enabled.</p>
+            <p class="admin-helper-copy">Payment approvals queue one confirmation for the team leader. A separate status report with the team, leader, Gmail address, and Gmail acceptance time is sent to the organizer; the confirmation itself is not copied. Export sent CSV to get each team, leader Gmail/name, and member names/Gmail addresses.</p>
             <a class="small-button" href="/wasd4381/email/qrtoggle">QR scanner settings ↗</a>
-            <div class="admin-outbox-actions"><button class="small-button approve" id="send-gmail-queue" type="button">✉ Send next batch now</button><button class="small-button" id="refresh-email-outbox" type="button">↻ Refresh</button><button class="small-button" id="export-sent-emails" type="button">↓ Export sent CSV</button></div>
+            <div class="admin-outbox-actions"><button class="small-button approve" id="send-gmail-queue" type="button">✉ Send next batch now</button><button class="small-button" id="refresh-email-outbox" type="button">↻ Refresh</button><button class="small-button" id="export-sent-emails" type="button">↓ Export sent team data CSV</button></div>
             <div class="stats-grid admin-email-stats">
               <article class="stat-card"><span>QUEUED</span><strong id="email-pending-count">0</strong></article>
               <article class="stat-card"><span>SENDING</span><strong id="email-sending-count">0</strong></article>
@@ -599,7 +599,7 @@
               </select>
             </div>
             <div class="admin-table admin-email-table">
-              <div class="admin-table-columns admin-email-columns"><span>STATUS</span><span>TEAM / CODE</span><span>RECIPIENT</span><span>DETAILS</span><span>ACTION</span></div>
+              <div class="admin-table-columns admin-email-columns"><span>STATUS</span><span>TEAM / CODE</span><span>TEAM LEADER</span><span>DETAILS</span><span>ACTION</span></div>
               <div id="admin-email-list" class="admin-email-list"></div>
             </div>
             <div class="empty-state" id="admin-email-empty" hidden><span>✳</span><strong>No emails match this view</strong><p>Try a different status or search.</p></div>
