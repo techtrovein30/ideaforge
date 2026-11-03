@@ -359,7 +359,7 @@
                 </div>
                 <div class="payment-qr">
                   <p class="eyebrow">PAY REGISTRATION FEE</p>
-                  <img src="/assets/payment%20qr.png" alt="UPI payment QR code for Saveetha School of Engineering" />
+                  <img src="/assets/kishore%20anna.jpeg" alt="UPI payment QR code" />
                   <p>Scan this QR with your UPI app, then enter the transaction reference and upload the payment screenshot below.</p>
                   <figure class="payment-proof-example">
                     <img src="/assets/Privacy-Safe%20UPI%20Transaction%20Screen.png" alt="Example payment confirmation with the UPI transaction ID clearly visible" />
@@ -528,7 +528,13 @@
             <div class="empty-state" id="admin-empty"><span>✳</span><strong>No registrations match this view</strong><p>Teams with submitted payment and free internal registrations are shown here.</p></div>
           </section>
           <section class="admin-page admin-registrations" id="admin-users-page" hidden>
-            <div class="admin-table-heading"><div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div><span class="prototype-note" id="admin-user-count">0 participants</span></div>
+            <div class="admin-table-heading">
+              <div><p class="eyebrow">PARTICIPANT DIRECTORY</p><h2>Registered users</h2></div>
+              <div class="admin-table-actions">
+                <button class="small-button" id="export-internal-participants" type="button">↓ Export Internal (Excel/CSV)</button>
+                <span class="prototype-note" id="admin-user-count">0 participants</span>
+              </div>
+            </div>
             <div class="admin-toolbar">
               <label class="admin-search-wrap"><span aria-hidden="true">⌕</span><input class="text-input admin-search" id="admin-user-search" type="search" placeholder="Search name, email, college, team, or phone…" autocomplete="off" /></label>
               <select class="text-input admin-filter" data-registration-type-filter aria-label="Filter participants by team type">

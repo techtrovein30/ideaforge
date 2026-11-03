@@ -181,27 +181,7 @@ Deno.serve(async (request) => {
         toName: row.recipient_name ?? "",
         ...content,
       });
-      const report = buildDeliveryReport({
-        teamName: row.team_name,
-        teamCode: row.team_code,
-        recipientName: row.recipient_name,
-        recipientEmail: row.recipient_email,
-        sentAt: new Date().toISOString(),
-      });
-      try {
-        await gmailSendMessage(GMAIL_CONFIG, tokenCache, {
-          fromEmail: GMAIL_CONFIG.fromEmail,
-          fromName: GMAIL_CONFIG.fromName,
-          toEmail: DELIVERY_REPORT_TO,
-          toName: "IdeaForge Admin",
-          ...report,
-        });
-      } catch (error) {
-        console.error(
-          "[ideaforge-email-worker] Confirmation was accepted by Gmail, but its admin delivery report could not be sent:",
-          safeError(error),
-        );
-      }
+
       return result;
     },
     markSent: async (id, messageId) => {
@@ -261,6 +241,50 @@ Deno.serve(async (request) => {
 
   try {
     const result = await processClaimedEmails(rows, dependencies, Date.now, 5);
+
+    // Send a single batch summary report if any emails were processed
+    if (result.attempted > 0) {
+      try {
+        const timestamp = new Date().toISOString();
+        await gmailSendMessage(GMAIL_CONFIG, tokenCache, {
+          fromEmail: GMAIL_CONFIG.fromEmail,
+          fromName: GMAIL_CONFIG.fromName,
+          toEmail: DELIVERY_REPORT_TO,
+          toName: "IdeaForge Admin",
+          subject: `IdeaForge Email Batch Summary: ${result.sent} sent, ${result.failed} failed`,
+          text: [
+            "IdeaForge Confirmation Email Batch Summary",
+            "=========================================",
+            `Time: ${timestamp}`,
+            `Total Attempted: ${result.attempted}`,
+            `Successfully Sent: ${result.sent}`,
+            `Scheduled for Retry: ${result.retried}`,
+            `Failed: ${result.failed}`,
+            "",
+            `Processed batch of ${rows.length} queued emails.`,
+          ].join("\n"),
+          html: `<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; background:#f4f6f2; padding: 24px; color: #17231e;">
+    <div style="max-width: 500px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <h2 style="margin-top:0; color:#10b981;">IdeaForge Email Batch Summary</h2>
+      <p style="color:#64748b; font-size: 13px;">Processed at: ${timestamp}</p>
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Total Attempted:</strong></td><td style="text-align:right;">${result.attempted}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#10b981;"><strong>Successfully Sent:</strong></td><td style="text-align:right; color:#10b981; font-weight:bold;">${result.sent}</td></tr>
+        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#f59e0b;"><strong>Retried:</strong></td><td style="text-align:right; color:#f59e0b;">${result.retried}</td></tr>
+        <tr><td style="padding: 8px 0; color:#ef4444;"><strong>Failed:</strong></td><td style="text-align:right; color:#ef4444;">${result.failed}</td></tr>
+      </table>
+      <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">This single summary replaces individual delivery copies to save your Gmail daily quota.</p>
+    </div>
+  </body>
+</html>`,
+        });
+      } catch (reportErr) {
+        console.error("[ideaforge-email-worker] Batch summary report could not be sent:", safeError(reportErr));
+      }
+    }
+
     return json({ enabled: true, ...result });
   } catch (error) {
     console.error("[ideaforge-email-worker] Batch persistence failed:", safeError(error));
