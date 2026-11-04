@@ -1,6 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  buildDeliveryReport,
   buildPaymentConfirmation,
   type PaymentConfirmation,
 } from "./content.ts";
@@ -22,11 +21,15 @@ const WORKER_TOKEN = Deno.env.get("IDEAFORGE_EMAIL_WORKER_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-const DELIVERY_REPORT_TO = "suvedhansuveg14@gmail.com";
 const BATCH_SIZE = Math.max(
-  1,
+  2,
   Math.min(Number.parseInt(Deno.env.get("IDEAFORGE_EMAIL_BATCH_SIZE") ?? "10", 10) || 10, 100),
 );
+const BATCH_CONFIRMATION = {
+  recipientEmail: "suvedhansuveg14@gmail.com",
+  teamName: "ARISE",
+  memberNames: ["IGRIS", "BERU", "BELLION"],
+};
 const SEND_DELAY_MS = (() => {
   const parsed = Number.parseInt(Deno.env.get("IDEAFORGE_EMAIL_SEND_DELAY_MS") ?? "", 10);
   if (!Number.isFinite(parsed)) return 2_000;
@@ -161,13 +164,15 @@ Deno.serve(async (request) => {
   }
 
   const { data, error: claimError } = await admin.rpc("ideaforge_email_claim", {
-    p_limit: BATCH_SIZE,
+    p_limit: BATCH_SIZE - 1,
   });
   if (claimError) {
     console.error("[ideaforge-email-worker] Could not claim queue rows:", claimError.message);
     return json({ error: "queue_claim_failed" }, 500);
   }
-  const rows = (data ?? []) as ClaimedEmail[];
+  const claimedRows = data ?? [];
+  const rows = claimedRows as ClaimedEmail[];
+  const batchId: string | null = claimedRows[0]?.batch_id ?? null;
 
   const dependencies: WorkerDependencies = {
     send: async (row) => {
@@ -190,17 +195,10 @@ Deno.serve(async (request) => {
       return result;
     },
     markSent: async (id, messageId) => {
-      const { error } = await admin
-        .from("ideaforge_email_outbox")
-        .update({
-          status: "sent",
-          sent_at: new Date().toISOString(),
-          locked_at: null,
-          gmail_message_id: messageId,
-          last_error: null,
-        })
-        .eq("id", id)
-        .eq("status", "sending");
+      const { error } = await admin.rpc("ideaforge_email_mark_sent", {
+        p_id: id,
+        p_message_id: messageId,
+      });
       if (error) throw new Error(`Could not record successful send: ${error.message}`);
     },
     markRetry: async (id, errorMessage, retryAt) => {
@@ -249,51 +247,66 @@ Deno.serve(async (request) => {
 
   try {
     const result = await processClaimedEmails(rows, dependencies, Date.now, 5, SEND_DELAY_MS);
+    let batchConfirmationSent = false;
+    let batchConfirmationError: string | null = null;
+    if (
+      batchId &&
+      result.sent > 0 &&
+      result.haltedOn !== "auth" &&
+      result.haltedOn !== "quota"
+    ) {
+      if (SEND_DELAY_MS > 0) {
+        await new Promise((resolve) => setTimeout(resolve, SEND_DELAY_MS));
+      }
 
-    // Send a single batch summary report if any emails were processed
-    if (result.attempted > 0) {
+      const content = buildPaymentConfirmation({
+        teamName: BATCH_CONFIRMATION.teamName,
+        recipientName: null,
+        memberNames: BATCH_CONFIRMATION.memberNames,
+      } satisfies PaymentConfirmation);
+      let messageId: string | null = null;
       try {
-        const timestamp = new Date().toISOString();
-        await gmailSendMessage(GMAIL_CONFIG, tokenCache, {
+        const response = await gmailSendMessage(GMAIL_CONFIG, tokenCache, {
           fromEmail: GMAIL_CONFIG.fromEmail,
           fromName: GMAIL_CONFIG.fromName,
-          toEmail: DELIVERY_REPORT_TO,
-          toName: "IdeaForge Admin",
-          subject: `IdeaForge Email Batch Summary: ${result.sent} sent, ${result.failed} failed`,
-          text: [
-            "IdeaForge Confirmation Email Batch Summary",
-            "=========================================",
-            `Time: ${timestamp}`,
-            `Total Attempted: ${result.attempted}`,
-            `Successfully Sent: ${result.sent}`,
-            `Scheduled for Retry: ${result.retried}`,
-            `Failed: ${result.failed}`,
-            "",
-            `Processed batch of ${rows.length} queued emails.`,
-          ].join("\n"),
-          html: `<!doctype html>
-<html>
-  <body style="font-family: Arial, sans-serif; background:#f4f6f2; padding: 24px; color: #17231e;">
-    <div style="max-width: 500px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
-      <h2 style="margin-top:0; color:#10b981;">IdeaForge Email Batch Summary</h2>
-      <p style="color:#64748b; font-size: 13px;">Processed at: ${timestamp}</p>
-      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Total Attempted:</strong></td><td style="text-align:right;">${result.attempted}</td></tr>
-        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#10b981;"><strong>Successfully Sent:</strong></td><td style="text-align:right; color:#10b981; font-weight:bold;">${result.sent}</td></tr>
-        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#f59e0b;"><strong>Retried:</strong></td><td style="text-align:right; color:#f59e0b;">${result.retried}</td></tr>
-        <tr><td style="padding: 8px 0; color:#ef4444;"><strong>Failed:</strong></td><td style="text-align:right; color:#ef4444;">${result.failed}</td></tr>
-      </table>
-      <p style="font-size: 12px; color: #94a3b8; margin-bottom: 0;">This single summary replaces individual delivery copies to save your Gmail daily quota.</p>
-    </div>
-  </body>
-</html>`,
+          toEmail: BATCH_CONFIRMATION.recipientEmail,
+          toName: "",
+          ...content,
         });
-      } catch (reportErr) {
-        console.error("[ideaforge-email-worker] Batch summary report could not be sent:", safeError(reportErr));
+        messageId = response.id;
+      } catch (error) {
+        batchConfirmationError = safeError(error);
+        console.error("[ideaforge-email-worker] ARISE batch confirmation could not be sent:", batchConfirmationError);
+        if (!(error instanceof GmailSendError) || !error.deliveryUncertain) {
+          const { error: releaseError } = await admin.rpc("ideaforge_email_release_canary", {
+            p_batch_id: batchId,
+          });
+          if (releaseError) {
+            throw new Error(`Could not release unused batch confirmation slot: ${releaseError.message}`);
+          }
+        }
+      }
+
+      if (messageId) {
+        const { error: recordError } = await admin.rpc("ideaforge_email_mark_canary_sent", {
+          p_batch_id: batchId,
+          p_message_id: messageId,
+        });
+        if (recordError) {
+          throw new Error(`Could not record ARISE confirmation acceptance: ${recordError.message}`);
+        }
+        batchConfirmationSent = true;
+      }
+    } else if (batchId) {
+      const { error: releaseError } = await admin.rpc("ideaforge_email_release_canary", {
+        p_batch_id: batchId,
+      });
+      if (releaseError) {
+        throw new Error(`Could not release unused batch confirmation slot: ${releaseError.message}`);
       }
     }
 
-    return json({ enabled: true, ...result });
+    return json({ enabled: true, ...result, batchConfirmationSent, batchConfirmationError });
   } catch (error) {
     console.error("[ideaforge-email-worker] Batch persistence failed:", safeError(error));
     return json({ error: "batch_processing_failed" }, 500);

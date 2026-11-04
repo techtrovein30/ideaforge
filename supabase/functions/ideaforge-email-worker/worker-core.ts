@@ -23,6 +23,7 @@ export interface BatchResult {
   sent: number;
   retried: number;
   failed: number;
+  haltedOn?: "auth" | "quota";
 }
 
 export function retryDelayMs(attemptCount: number): number {
@@ -101,6 +102,7 @@ export async function processClaimedEmails(
 
       if (error instanceof GmailSendError &&
         (error.kind === "auth" || error.kind === "quota")) {
+        result.haltedOn = error.kind;
         const quotaRetryAt = error.kind === "quota"
           ? new Date(now() + quotaRetryDelayMs(row.attempt_count)).toISOString()
           : undefined;

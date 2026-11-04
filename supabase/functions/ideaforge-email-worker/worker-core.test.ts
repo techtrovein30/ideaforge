@@ -167,6 +167,7 @@ describe("IdeaForge email worker core", () => {
 
     expect(result.failed).toBe(1);
     expect(result.attempted).toBe(1);
+    expect(result.haltedOn).toBe("auth");
     expect(deps.release).toHaveBeenCalledWith("queue-id-2", 1);
   });
 
@@ -179,6 +180,7 @@ describe("IdeaForge email worker core", () => {
     const result = await processClaimedEmails([row, second], deps, () => 0);
 
     expect(result.retried).toBe(1);
+    expect(result.haltedOn).toBe("quota");
     expect(deps.release).toHaveBeenCalledWith(
       "queue-id-2",
       1,

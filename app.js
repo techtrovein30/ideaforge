@@ -2387,8 +2387,13 @@ document.querySelector("#send-gmail-queue").addEventListener("click", async (eve
       return;
     }
     await loadAdminDashboard();
+    const batchConfirmationStatus = data.batchConfirmationSent
+      ? "ARISE confirmation accepted by Gmail."
+      : data.batchConfirmationError
+      ? `ARISE confirmation failed: ${data.batchConfirmationError}`
+      : "ARISE confirmation skipped because no queued confirmation succeeded or Gmail authorization/quota stopped the batch.";
     showToast(
-      `Gmail queue complete: ${data.sent} sent, ${data.failed} failed, ${data.retried} scheduled to retry.`,
+      `Gmail queue complete: ${data.sent} sent, ${data.failed} failed, ${data.retried} scheduled to retry. ${batchConfirmationStatus}`,
       true,
     );
   } catch (error) {

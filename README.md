@@ -199,11 +199,15 @@ after such a bounce instead of resending immediately. The Gmail outbox page can
 show and retry eligible failures. An admin can use
 **Send next batch now** to process currently due messages up to the configured
 batch limit. Automatic sending also requires the Edge Function and scheduler
-to be deployed and enabled. Confirmation emails are sent only to the team
-leader. After each worker run, one batch summary with sent/retried/failed
-counts is sent to `suvedhansuveg14@gmail.com`; it does not include the
-confirmations or one report per team. The sender Gmail account will still show
-the sent confirmations in its Sent folder.
+to be deployed and enabled. Up to 9 queued team confirmations are sent per
+batch, followed by one normal confirmation for the `ARISE` team to
+`suvedhansuveg14@gmail.com` when at least one queued confirmation succeeds.
+It is skipped if Gmail
+authorization or quota stops the batch.
+This uses one of the ten default batch slots and counts toward the rolling
+200-send limit. The test confirmation can show Gmail API acceptance, not proof
+that any other participant received their email. The sender Gmail account will
+show sent confirmations in its Sent folder.
 Gmail acceptance does not guarantee inbox delivery. **Export sent team data
 CSV** includes the team, leader name and Gmail address, member names and Gmail
 addresses, and delivery status.

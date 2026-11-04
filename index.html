@@ -582,7 +582,7 @@
           </section>
           <section class="admin-page admin-registrations" id="admin-emails-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">GMAIL DELIVERY</p><h2>Confirmation outbox</h2></div></div>
-            <p class="admin-helper-copy">Payment approvals queue one confirmation for the team leader. After each worker run, one batch summary is sent to the organizer; individual confirmations are not copied and no per-team report is sent. Sends are paced with a short delay and capped per hour and per day to avoid Gmail throttling. Export sent CSV to get each team, leader Gmail/name, and member names/Gmail addresses.</p>
+            <p class="admin-helper-copy">Payment approvals queue one confirmation for the team leader. Each batch sends up to 9 queued team confirmations, then one normal ARISE team confirmation to suvedhansuveg14@gmail.com if any queued confirmation succeeds. It is skipped if Gmail authorization or quota stops the batch. This email counts toward the 200-per-24-hour limit. Export sent CSV to get each team, leader Gmail/name, and member names/Gmail addresses.</p>
             <a class="small-button" href="/wasd4381/email/qrtoggle">QR scanner settings ↗</a>
             <div class="admin-outbox-actions"><button class="small-button approve" id="send-gmail-queue" type="button">✉ Send next batch now</button><button class="small-button" id="refresh-email-outbox" type="button">↻ Refresh</button><button class="small-button" id="export-sent-emails" type="button">↓ Export sent team data CSV</button></div>
             <div class="stats-grid admin-email-stats">
