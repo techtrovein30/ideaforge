@@ -181,7 +181,20 @@ select.text-input { color-scheme: dark; }
   line-height: 1.55;
 }
 .registration-type-note.is-selected { color: #ffd0ad; }
-.registration-type-card.is-closed { opacity: .5; cursor: not-allowed; filter: grayscale(.35); }
+.registration-type-card.is-closed { opacity: .78; cursor: not-allowed; filter: none; border-color: rgba(255, 81, 67, .3); background: rgba(255, 81, 67, .03); }
+.registration-type-slots-notice {
+  display: none;
+  margin: 10px 0 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(255, 81, 67, .18);
+  border: 1px solid rgba(255, 81, 67, .35);
+  color: #ffb8bd;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.registration-type-card.is-closed .registration-type-slots-notice { display: block; }
 .registration-type-card.is-closed:hover { border-color: rgba(255, 255, 255, .12); transform: none; }
 .registration-type-card.is-closed .registration-type-check { display: none; }
 .registration-type-closed {
