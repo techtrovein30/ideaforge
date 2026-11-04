@@ -186,7 +186,7 @@ pending outbox rows first; enabling the worker will send queued confirmations.
 Configure the
 `ideaforge_supabase_url` and `ideaforge_email_worker_token` Vault entries
 first. The scheduler runs every five minutes; the database enforces a
-concurrency-safe rolling limit of 40 sends per hour and 200 per 24 hours, and
+concurrency-safe rolling limit of 200 sends per 24 hours, and
 the worker waits `IDEAFORGE_EMAIL_SEND_DELAY_MS` (default 2000 ms) between
 individual sends. Keep `IDEAFORGE_EMAIL_BATCH_SIZE` small (default 10) so a
 paced batch stays inside the Edge Function timeout.

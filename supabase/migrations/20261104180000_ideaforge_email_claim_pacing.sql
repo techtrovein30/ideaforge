@@ -1,7 +1,5 @@
--- Gmail throttles free accounts that send large bursts, even when the rolling
--- daily total is below the documented limit. Pace claims so the worker cannot
--- drain the whole queue in a few minutes: at most 40 sends per rolling hour and
--- 200 per rolling day, on top of the per-run batch size.
+-- Pace claims so the worker respects the 200 per rolling day limit,
+-- on top of the per-run batch size.
 
 create or replace function public.ideaforge_email_claim(p_limit integer default 10)
 returns table (
@@ -21,7 +19,6 @@ set row_security = off
 as $$
 declare
   v_daily_remaining integer;
-  v_hourly_remaining integer;
   v_limit integer;
 begin
   if p_limit is null or p_limit < 1 then
@@ -39,15 +36,7 @@ begin
   into v_daily_remaining
   from public.ideaforge_email_outbox o;
 
-  select greatest(
-    0,
-    40
-      - count(*) filter (where o.status = 'sent' and o.sent_at >= now() - interval '1 hour')
-  )::integer
-  into v_hourly_remaining
-  from public.ideaforge_email_outbox o;
-
-  v_limit := least(p_limit, v_daily_remaining, v_hourly_remaining, 200);
+  v_limit := least(p_limit, v_daily_remaining, 200);
   if v_limit < 1 then
     return;
   end if;
