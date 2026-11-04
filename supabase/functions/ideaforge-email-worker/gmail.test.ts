@@ -82,17 +82,18 @@ describe("Gmail provider helpers", () => {
     expect(senderMismatch.message).toContain("(forbidden)");
   });
 
-  it("allows safe retry when the OAuth token endpoint cannot be reached", async () => {
+  it("preserves OAuth endpoint network error details for diagnosis", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network down")));
     const cache = { token: "", expiresAt: 0 };
 
     await expect(fetchAccessToken(CONFIG, cache)).rejects.toMatchObject({
       kind: "transient",
       deliveryUncertain: false,
+      message: expect.stringContaining("network down"),
     });
   });
 
-  it("marks a dropped Gmail send connection as delivery-uncertain", async () => {
+  it("preserves Gmail send network errors while marking delivery uncertain", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn()
@@ -111,6 +112,7 @@ describe("Gmail provider helpers", () => {
     })).rejects.toMatchObject({
       kind: "transient",
       deliveryUncertain: true,
+      message: expect.stringContaining("network down"),
     });
   });
 });

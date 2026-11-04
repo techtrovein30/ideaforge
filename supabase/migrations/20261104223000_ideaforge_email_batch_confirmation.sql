@@ -183,12 +183,12 @@ begin
       o.team_name, o.team_code, o.member_names, o.attempt_count
   ),
   reservation as (
-    insert into public.ideaforge_email_delivery_history (
+    insert into public.ideaforge_email_delivery_history as history (
       batch_id, kind, status, recipient_email
     )
     select v_batch_id, 'batch_confirmation', 'reserved', 'suvedhansuveg14@gmail.com'
     where exists (select 1 from claimed)
-    returning batch_id
+    returning history.batch_id
   )
   select c.id, c.team_id, c.recipient_email, c.recipient_name,
     c.team_name, c.team_code, c.member_names, c.attempt_count, r.batch_id

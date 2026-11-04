@@ -25,6 +25,30 @@ export class GmailSendError extends Error {
   }
 }
 
+function networkErrorDetail(error: unknown): string {
+  const details: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && !seen.has(current) && details.length < 4) {
+    seen.add(current);
+    if (current instanceof Error) {
+      details.push(`${current.name}: ${current.message}`);
+      current = current.cause;
+    } else if (typeof current === "string") {
+      details.push(current);
+      break;
+    } else {
+      break;
+    }
+  }
+
+  const detail = details.join(" <- ")
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\b(authorization|access_token|refresh_token|client_secret)\b\s*[:=]\s*\S+/gi, "$1=[redacted]")
+    .slice(0, 500);
+  return detail || "No network error detail was provided.";
+}
+
 function toBase64(value: string): string {
   const bytes = new TextEncoder().encode(value);
   let binary = "";
@@ -173,8 +197,12 @@ export async function fetchAccessToken(
         grant_type: "refresh_token",
       }),
     });
-  } catch {
-    throw new GmailSendError("transient", 0, "Could not reach the Gmail OAuth token endpoint.");
+  } catch (error) {
+    throw new GmailSendError(
+      "transient",
+      0,
+      `Could not reach the Gmail OAuth token endpoint: ${networkErrorDetail(error)}`,
+    );
   }
   const body = await response.text();
   if (!response.ok) throw classifySendError(response.status, body);
@@ -200,6 +228,7 @@ export async function gmailSendMessage(
   parts: MailParts,
 ): Promise<{ id: string }> {
   const token = await fetchAccessToken(config, cache);
+  const requestBody = JSON.stringify({ raw: base64urlEncode(buildRawMessage(parts)) });
   let response: Response;
   try {
     response = await fetch(
@@ -210,14 +239,14 @@ export async function gmailSendMessage(
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ raw: base64urlEncode(buildRawMessage(parts)) }),
+        body: requestBody,
       },
     );
-  } catch {
+  } catch (error) {
     throw new GmailSendError(
       "transient",
       0,
-      "Gmail send request outcome is unknown; verify delivery before retrying.",
+      `Gmail send request outcome is unknown (${networkErrorDetail(error)}); verify delivery before retrying.`,
       true,
     );
   }
