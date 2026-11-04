@@ -2020,6 +2020,35 @@ function exportSentEmails() {
   URL.revokeObjectURL(url);
 }
 
+function exportInternalParticipants() {
+  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const internalTeams = (adminTeamsData ?? []).filter((team) => team.registration_type === "internal");
+  const rows = [
+    ["Team Name", "Team Code", "Full Name", "Register Number", "Role", "Email", "Mobile Number", "Registered At"],
+    ...internalTeams.flatMap((team) => {
+      const members = team.ideaforge_members ?? [];
+      return members.map((member) => [
+        team.team_name,
+        team.team_code ?? "",
+        member.full_name,
+        member.register_number ?? "",
+        member.is_team_contact ? "Leader" : "Member",
+        member.email,
+        member.mobile_number,
+        team.created_at ?? "",
+      ]);
+    }),
+  ];
+  const csv = rows.map((row) => row.map(quote).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "ideaforge-internal-participants.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+
 document.querySelector("#admin-google-sign-in").addEventListener("click", async (event) => {
   if (!supabase) {
     showAdminLogin("Supabase is not configured for this deployment.");
@@ -2467,6 +2496,7 @@ document.querySelector(".admin-outbox-filters").addEventListener("click", (event
   filterAdminEmails();
 });
 document.querySelector("#export-sent-emails").addEventListener("click", exportSentEmails);
+document.querySelector("#export-internal-participants")?.addEventListener("click", exportInternalParticipants);
 
 document.querySelector("#admin-user-search").addEventListener("input", (event) => {
   filterAdminUsers(event.currentTarget.value);
