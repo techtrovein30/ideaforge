@@ -529,18 +529,6 @@ function updateRegistrationTypeSelection() {
   for (const card of document.querySelectorAll("[data-registration-card]")) {
     card.classList.toggle("selected", card.dataset.registrationCard === registrationType);
   }
-  const note = document.querySelector("#registration-type-note");
-  if (!note) return;
-  note.classList.toggle("is-selected", Boolean(registrationType));
-  if (registrationType === "internal") {
-    note.textContent = "SIMATS internal team: free entry. We'll ask for a college register number for every member.";
-  } else if (registrationType === "external") {
-    note.textContent = "External team: ₹99 per member. Enter your own college name for every member.";
-  } else if (registrationAvailability && !registrationAvailability.internal && registrationAvailability.external) {
-    note.textContent = "Internal registration is closed as slots are full. External registration is currently open.";
-  } else {
-    note.textContent = "Select one option above to continue.";
-  }
 }
 
 function renderMembers() {
