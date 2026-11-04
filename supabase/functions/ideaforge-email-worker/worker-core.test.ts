@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { GmailSendError } from "./gmail.ts";
-import { processClaimedEmails, retryDelayMs, type WorkerDependencies } from "./worker-core.ts";
+import {
+  processClaimedEmails,
+  quotaRetryDelayMs,
+  retryDelayMs,
+  type WorkerDependencies,
+} from "./worker-core.ts";
 
 const row = {
   id: "queue-id",
@@ -44,7 +49,7 @@ describe("IdeaForge email worker core", () => {
 
   it("retries transient provider failures with exponential backoff", async () => {
     const deps = dependencies(async () => {
-      throw new GmailSendError("quota", 429, "Gmail rate limit.");
+      throw new GmailSendError("transient", 429, "Gmail rate limit.");
     });
     const result = await processClaimedEmails([row], deps, () => 0);
 
@@ -54,6 +59,31 @@ describe("IdeaForge email worker core", () => {
       "Gmail rate limit.",
       new Date(120_000).toISOString(),
     );
+  });
+
+  it("backs quota failures off in hours because Gmail limits can take a day to clear", async () => {
+    const deps = dependencies(async () => {
+      throw new GmailSendError("quota", 429, "Gmail rate limit.");
+    });
+    const result = await processClaimedEmails([row], deps, () => 0);
+
+    expect(result.retried).toBe(1);
+    expect(deps.markRetry).toHaveBeenCalledWith(
+      "queue-id",
+      "Gmail rate limit.",
+      new Date(60 * 60_000).toISOString(),
+    );
+  });
+
+  it("paces sends between claimed emails", async () => {
+    const deps = dependencies(async () => ({ id: "gmail-message-id" }));
+    const pause = vi.fn(async () => {});
+    const second = { ...row, id: "queue-id-2" };
+
+    await processClaimedEmails([row, second], deps, Date.now, 5, 2_000, pause);
+
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(pause).toHaveBeenCalledWith(2_000);
   });
 
   it("fails permanent errors and uncertain delivery errors without blind retry", async () => {
@@ -140,8 +170,30 @@ describe("IdeaForge email worker core", () => {
     expect(deps.release).toHaveBeenCalledWith("queue-id-2", 1);
   });
 
+  it("holds the rest of a batch for an hour after a quota error", async () => {
+    const deps = dependencies(async () => {
+      throw new GmailSendError("quota", 429, "Gmail sending limit.");
+    });
+    const second = { ...row, id: "queue-id-2", attempt_count: 1 };
+
+    const result = await processClaimedEmails([row, second], deps, () => 0);
+
+    expect(result.retried).toBe(1);
+    expect(deps.release).toHaveBeenCalledWith(
+      "queue-id-2",
+      1,
+      new Date(60 * 60_000).toISOString(),
+    );
+  });
+
   it("caps exponential retry delay at one hour", () => {
     expect(retryDelayMs(1)).toBe(2 * 60_000);
     expect(retryDelayMs(20)).toBe(60 * 60_000);
+  });
+
+  it("caps quota retry delay at twenty-four hours", () => {
+    expect(quotaRetryDelayMs(1)).toBe(60 * 60_000);
+    expect(quotaRetryDelayMs(3)).toBe(4 * 60 * 60_000);
+    expect(quotaRetryDelayMs(20)).toBe(24 * 60 * 60_000);
   });
 });

@@ -15,7 +15,7 @@ export interface WorkerDependencies {
   markSent(id: string, messageId: string): Promise<void>;
   markRetry(id: string, error: string, retryAt: string): Promise<void>;
   markFailed(id: string, error: string, retryable: boolean): Promise<void>;
-  release(id: string, attemptCount: number): Promise<void>;
+  release(id: string, attemptCount: number, retryAt?: string): Promise<void>;
 }
 
 export interface BatchResult {
@@ -30,11 +30,24 @@ export function retryDelayMs(attemptCount: number): number {
   return Math.min(2 * 2 ** exponent, 60) * 60_000;
 }
 
+// Gmail sending-limit errors can take up to 24 hours to clear, so quota
+// failures back off in hours instead of the minutes used for transient errors.
+export function quotaRetryDelayMs(attemptCount: number): number {
+  const exponent = Math.max(0, attemptCount - 1);
+  return Math.min(60 * 2 ** exponent, 24 * 60) * 60_000;
+}
+
+export type Pause = (ms: number) => Promise<void>;
+
+const defaultPause: Pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function processClaimedEmails(
   rows: ClaimedEmail[],
   dependencies: WorkerDependencies,
   now: () => number = Date.now,
   maxAttempts = 5,
+  paceDelayMs = 0,
+  pause: Pause = defaultPause,
 ): Promise<BatchResult> {
   const result: BatchResult = {
     attempted: 0,
@@ -44,6 +57,10 @@ export async function processClaimedEmails(
   };
 
   for (const [index, row] of rows.entries()) {
+    if (index > 0 && paceDelayMs > 0) {
+      await pause(paceDelayMs);
+    }
+
     if (!row.recipient_email) {
       await dependencies.markFailed(row.id, "No recipient email was recorded.", false);
       result.failed += 1;
@@ -62,7 +79,12 @@ export async function processClaimedEmails(
         await dependencies.markRetry(
           row.id,
           error.message,
-          new Date(now() + retryDelayMs(row.attempt_count)).toISOString(),
+          new Date(
+            now() +
+              (error.kind === "quota"
+                ? quotaRetryDelayMs(row.attempt_count)
+                : retryDelayMs(row.attempt_count)),
+          ).toISOString(),
         );
         result.retried += 1;
       } else {
@@ -79,8 +101,15 @@ export async function processClaimedEmails(
 
       if (error instanceof GmailSendError &&
         (error.kind === "auth" || error.kind === "quota")) {
+        const quotaRetryAt = error.kind === "quota"
+          ? new Date(now() + quotaRetryDelayMs(row.attempt_count)).toISOString()
+          : undefined;
         for (const unattempted of rows.slice(index + 1)) {
-          await dependencies.release(unattempted.id, unattempted.attempt_count);
+          if (quotaRetryAt) {
+            await dependencies.release(unattempted.id, unattempted.attempt_count, quotaRetryAt);
+          } else {
+            await dependencies.release(unattempted.id, unattempted.attempt_count);
+          }
         }
         break;
       }

@@ -582,7 +582,7 @@
           </section>
           <section class="admin-page admin-registrations" id="admin-emails-page" hidden>
             <div class="admin-table-heading"><div><p class="eyebrow">GMAIL DELIVERY</p><h2>Confirmation outbox</h2></div></div>
-            <p class="admin-helper-copy">Payment approvals queue one confirmation for the team leader. A separate status report with the team, leader, Gmail address, and Gmail acceptance time is sent to the organizer; the confirmation itself is not copied. Export sent CSV to get each team, leader Gmail/name, and member names/Gmail addresses.</p>
+            <p class="admin-helper-copy">Payment approvals queue one confirmation for the team leader. After each worker run, one batch summary is sent to the organizer; individual confirmations are not copied and no per-team report is sent. Sends are paced with a short delay and capped per hour and per day to avoid Gmail throttling. Export sent CSV to get each team, leader Gmail/name, and member names/Gmail addresses.</p>
             <a class="small-button" href="/wasd4381/email/qrtoggle">QR scanner settings ↗</a>
             <div class="admin-outbox-actions"><button class="small-button approve" id="send-gmail-queue" type="button">✉ Send next batch now</button><button class="small-button" id="refresh-email-outbox" type="button">↻ Refresh</button><button class="small-button" id="export-sent-emails" type="button">↓ Export sent team data CSV</button></div>
             <div class="stats-grid admin-email-stats">

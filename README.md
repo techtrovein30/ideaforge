@@ -157,8 +157,10 @@ credentials, function deployment, Vault secrets, and scheduler still need to
 be configured in Supabase. Required secret names are `GMAIL_CLIENT_ID`,
 `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `IDEAFORGE_GMAIL_FROM`,
 `IDEAFORGE_GMAIL_FROM_NAME`, `IDEAFORGE_EMAIL_WORKER_TOKEN`, and
-`IDEAFORGE_EMAIL_SENDING_ENABLED`. The Supabase service-role key is never
-needed in the browser and must never be placed in a `VITE_*` variable.
+`IDEAFORGE_EMAIL_SENDING_ENABLED`. Optional pacing secrets are
+`IDEAFORGE_EMAIL_BATCH_SIZE` (default `10`) and
+`IDEAFORGE_EMAIL_SEND_DELAY_MS` (default `2000`). The Supabase service-role key
+is never needed in the browser and must never be placed in a `VITE_*` variable.
 The worker is configured with `verify_jwt = false` so scheduled requests can
 authenticate with their high-entropy worker bearer token. The admin outbox's
 **Send queued now** button instead uses the signed-in user's JWT; the worker
@@ -184,16 +186,24 @@ pending outbox rows first; enabling the worker will send queued confirmations.
 Configure the
 `ideaforge_supabase_url` and `ideaforge_email_worker_token` Vault entries
 first. The scheduler runs every five minutes; the database enforces a
-concurrency-safe 200-message rolling 24-hour cap.
+concurrency-safe rolling limit of 40 sends per hour and 100 per 24 hours, and
+the worker waits `IDEAFORGE_EMAIL_SEND_DELAY_MS` (default 2000 ms) between
+individual sends. Keep `IDEAFORGE_EMAIL_BATCH_SIZE` small (default 10) so a
+paced batch stays inside the Edge Function timeout.
 
 The worker records Gmail API acceptance, which is not proof of inbox delivery.
-The Gmail outbox page can show and retry eligible failures. An admin can use
+Gmail can also accept a message and then bounce it later with a
+"You have reached a limit for sending mail" notice; those outbox rows stay
+marked sent and are not retried automatically. Pause sending for up to 24 hours
+after such a bounce instead of resending immediately. The Gmail outbox page can
+show and retry eligible failures. An admin can use
 **Send next batch now** to process currently due messages up to the configured
 batch limit. Automatic sending also requires the Edge Function and scheduler
 to be deployed and enabled. Confirmation emails are sent only to the team
-leader. A separate delivery status report with the team name/code, leader name
-and Gmail address, and Gmail acceptance time is sent to
-`suvedhansuveg14@gmail.com`; it does not include a copy of the confirmation.
+leader. After each worker run, one batch summary with sent/retried/failed
+counts is sent to `suvedhansuveg14@gmail.com`; it does not include the
+confirmations or one report per team. The sender Gmail account will still show
+the sent confirmations in its Sent folder.
 Gmail acceptance does not guarantee inbox delivery. **Export sent team data
 CSV** includes the team, leader name and Gmail address, member names and Gmail
 addresses, and delivery status.

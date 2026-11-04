@@ -76,7 +76,7 @@ begin
       'Content-Type', 'application/json'
     ),
     body := '{}'::jsonb,
-    timeout_milliseconds := 10000
+    timeout_milliseconds := 60000
   )
   into v_request_id;
 
